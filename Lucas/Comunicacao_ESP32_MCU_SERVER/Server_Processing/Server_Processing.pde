@@ -13,16 +13,28 @@ void setup() {
 }
 
 void draw() {
-  Client client = server.available();
-  if (client != null) {
-    String data = client.readString();
+  Client client1 = server.available();
+  Client client2 = null;
+  if (client1 != null) {
+    String data = client1.readString();
     if (data != null) {
-      // Processar os dados recebidos
-      println("Dados recebidos do ESP32: " + data);
+      // Process the received data
+      println("Data received from client 1: " + data);
       
-      // Enviar os dados para o NodeMCU (se necessário)
-      // client.write("Dados para o NodeMCU");
+      // Find another client to send the data to
+      for (Client c : server.clients()) {
+        if (c != client1) {
+          client2 = c;
+          break;
+        }
+      }
+      
+      // Send the data to the other client
+      if (client2 != null) {
+        client2.write(data);
+        println("Data sent to client 2: " + data);
+      }
     }
-    client.stop();
+    client1.stop();
   }
 }
