@@ -12,6 +12,7 @@ THIS CODE PROVIDED AS IS, WITH NO CLAIMS OF FUNCTIONALITY OR EVEN IF IT WILL WOR
 */
 
 import processing.serial.*;  // serial library lets us talk to Arduino
+import controlP5.*; //Importar a biblioteca de GUI ControlP5 (instale em "Sketch" -> "Importar Biblioteca..." -> "Manage Libraries" -> Digite "ControlP5" na barra de busca, sem as aspas)
 PFont font;
 PFont portsFont;
 Scrollbar scaleBar;
@@ -43,33 +44,23 @@ Radio[] button = new Radio[Serial.list().length*2];
 int numPorts = serialPorts.length;
 boolean refreshPorts = false;
 
+ControlP5 cp5; //Criar objeto do tipo ControlP5
+
 void setup() {
   size(700, 600);  // Stage size
-  frameRate(100);
-  font = loadFont("Arial-BoldMT-24.vlw");
-  textFont(font);
-  textAlign(CENTER);
-  rectMode(CENTER);
-  ellipseMode(CENTER);
-// Scrollbar constructor inputs: x,y,width,height,minVal,maxVal
-  scaleBar = new Scrollbar (400, 575, 180, 12, 0.5, 1.0);  // set parameters for the scale bar
-  RawY = new int[PulseWindowWidth];          // initialize raw pulse waveform array
-  ScaledY = new int[PulseWindowWidth];       // initialize scaled pulse waveform array
-  rate = new int [BPMWindowWidth];           // initialize BPM waveform array
-  zoom = 0.75;                               // initialize scale of heartbeat window
-
- // set the visualizer lines to 0
- resetDataTraces();
-
- background(0);
- // DRAW OUT THE PULSE WINDOW AND BPM WINDOW RECTANGLES
- drawDataWindows();
- drawHeart();
-
-// GO FIND THE ARDUINO
-  fill(eggshell);
-  text("Select Your Serial Port",245,30);
-  listAvailablePorts();
+  //REMOVA OS COMENTÁRIOS DAS LINHAS ABAIXO PARA VER A INTERFACE DE TESTE COM O BOTÃO (E REMOVA TEMPORARIAMENTE O CÓDIGO DA FUNÇÃO draw() para ver funcionando)
+  //background(0);
+  //cp5 = new ControlP5(this);
+  
+  //textSize(20);
+  //cp5.addButton("Conectar (Listen)")
+  //  .setPosition(200,200)
+  //  .setSize(200,80);
+  
+  
+  //textSize(40);
+  //text("Conectar com o servidor", 150, 50);
+  drawPulseSensorMainVisualizer();
 
 }
 
@@ -113,6 +104,34 @@ if(serialPortFound){
 
 }  //end of draw loop
 
+void drawPulseSensorMainVisualizer(){
+
+    frameRate(100);
+    font = loadFont("Arial-BoldMT-24.vlw");
+    textFont(font);
+    textAlign(CENTER);
+    rectMode(CENTER);
+    ellipseMode(CENTER);
+  // Scrollbar constructor inputs: x,y,width,height,minVal,maxVal
+    scaleBar = new Scrollbar (400, 575, 180, 12, 0.5, 1.0);  // set parameters for the scale bar
+    RawY = new int[PulseWindowWidth];          // initialize raw pulse waveform array
+    ScaledY = new int[PulseWindowWidth];       // initialize scaled pulse waveform array
+    rate = new int [BPMWindowWidth];           // initialize BPM waveform array
+    zoom = 0.75;                               // initialize scale of heartbeat window
+  
+   // set the visualizer lines to 0
+   resetDataTraces();
+  
+   background(0);
+   // DRAW OUT THE PULSE WINDOW AND BPM WINDOW RECTANGLES
+   drawDataWindows();
+   drawHeart();
+  
+  // GO FIND THE ARDUINO
+    fill(eggshell);
+    text("Select Your Serial Port",245,30);
+    listAvailablePorts();
+}
 
 void drawDataWindows(){
     // DRAW OUT THE PULSE WINDOW AND BPM WINDOW RECTANGLES
