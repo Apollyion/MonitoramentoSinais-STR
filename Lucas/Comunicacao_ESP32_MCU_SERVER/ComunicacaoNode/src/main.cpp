@@ -23,12 +23,15 @@ void loop() {
     Serial.println("Conectando ao servidor...");
     if (client.connect(serverIP, serverPort)) {
       Serial.println("Conectado ao servidor");
+      client.print("nodemcu"); // Envia o nome do dispositivo
     } else {
       Serial.println("Falha na conexão com o servidor");
     }
   }
 
   // Ler dados do servidor, se necessário
+
+
   while (client.available()) {
     String data = client.readStringUntil('\n');
     Serial.println("Dados recebidos do servidor: " + data);

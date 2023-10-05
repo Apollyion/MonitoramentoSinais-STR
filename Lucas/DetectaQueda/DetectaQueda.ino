@@ -22,6 +22,7 @@ byte trigger1count=0; //stores the counts past since trigger 1 was set true
 byte trigger2count=0; //stores the counts past since trigger 2 was set true
 byte trigger3count=0; //stores the counts past since trigger 3 was set true
 int angleChange=0;
+int tempo = 0;
 
 long timer = 0;
 
@@ -34,6 +35,7 @@ void setup() {
 // Void loop function - running continuously 
 void loop()
 {
+    tempo = millis();
     mpu6050.update();            //update the MPU6050
     getMotion6();                //gain the values of Acceleration and Gyroscope value
     ax = (AcX-2050)/16384.00;
@@ -46,7 +48,7 @@ void loop()
     // calculating Amplitute vactor for 3 axis
     float Raw_Amp = pow(pow(ax,2)+pow(ay,2)+pow(az,2),0.5);
     int Amp = Raw_Amp * 10;  // Multiplied by 10 to values are between 0 to 1
-    Serial.println(Amp);
+    //Serial.println(Amp);
     if (Amp<=2 && trigger2==false) //if AM breaks lower threshold (0.4g)
     { 
         trigger1=true;
@@ -97,6 +99,7 @@ void loop()
     if (fall==true) //in event of a fall detection
     { 
         Serial.println("FALL DETECTED using MPU sensor");
+        delay(1000);
         //send_event("Webhooks Event Name Sending"); 
         fall=false;
     }
@@ -110,7 +113,9 @@ void loop()
         trigger1=false; trigger1count=0;
         Serial.println("TRIGGER 1 DECACTIVATED");
     }
-    delay(100);
+    tempo = millis() - tempo;
+    //Serial.println(tempo);
+    delay(48);
 }
 
 void getMotion6(void){

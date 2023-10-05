@@ -28,21 +28,18 @@ void loop() {
       // Enviar dados para o servidor
 
       // Faz isso somente 10 vezes e tira a media
-      int n = 10;
+      int n = 100;
       unsigned long sum = 0;
-      if (flag == 0) {
+      for (int i = 0; i < n; i++) {
+        unsigned long t0 = millis();
         client.print("Ola servidor!");
         client.flush();
-        // flag=1;
-      } 
-
+        unsigned long t1 = millis();
+        sum += t1 - t0;
+      }
       Serial.print("Tempo médio de envio: ");
       Serial.print(sum/n);
-      }
-
-
-    } else {
-      Serial.println("Falha na conexão com o servidor");
     }
+  }
 }
 
