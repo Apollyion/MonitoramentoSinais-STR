@@ -1,10 +1,14 @@
-import processing.serial.*;  
+import processing.serial.*;
+import processing.net.*;
 import controlP5.*;
+import java.net.*;
+import java.io.*;
 
 ControlP5 cp5;               // Declare a ControlP5 object for creating GUI elements
 Textfield ipAddressInput;    // Declare a Textfield for entering an IP address
 Textfield portInput;         // Declare a Textfield for entering a port number
 Button connectButton;        // Declare a Button for triggering a connection
+Socket mainSocket;
 
 void setup() {
   size(1400, 800);            // Set the size of the Processing window
@@ -58,9 +62,45 @@ void draw() {
 
   // Display the entered port number
   text("Port: " + portInput.getText(), 200, 320);
+  
+  if (mainSocket != null && mainSocket.isConnected()) { // If connected to the server
+    fill(0, 255, 0); // Set the fill color to green (RGB: 0, 255, 0)
+    textSize(24);              // Set the text size
+    textAlign(RIGHT);           // Set the text alignment to left
+    text("CONEXÃO BEM SUCEDIDA!", 1000, 320);
+    
+    fill(255);                 // Set the text color to white
+    textSize(24);              // Set the text size
+    textAlign(LEFT);
+    try {
+      BufferedReader input = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
+      if (input.ready()) {
+        String serverData = input.readLine();
+        if (serverData != null) {
+          println("Recebido do servidor: " + serverData);
+        }
+      }
+      
+      // Enviar dados para o servidor
+      int n = 100;
+      long sum = 0;
+      PrintWriter output = new PrintWriter(mainSocket.getOutputStream(), true);
+      for (int i = 0; i < n; i++) {
+        long t0 = millis();
+        output.println("Ola servidor!");
+        long t1 = millis();
+        sum += t1 - t0;
+      }
+      println("Tempo médio de envio: " + sum / float(n));
+    } 
+    catch (IOException e) {
+      println("Erro ao comunicar com o servidor: " + e.getMessage());
+    }
+  }
 }
 
 void controlEvent(ControlEvent event) {
+  
   if (event.isController()) {
     if (event.getController() == connectButton) {  // Check if the Connect button is clicked
       String ipAddress = ipAddressInput.getText();  // Get the text from the IP Address Textfield
@@ -69,6 +109,38 @@ void controlEvent(ControlEvent event) {
       // Print the text from the text boxes to the Processing terminal
       println("IP Address: " + ipAddress);
       println("Port: " + port);
+      
+      String ipAddrInput = ipAddressInput.getText();
+      String portNumInput = portInput.getText();
+      
+      if(ipAddrInput==""){
+        println("O campo do endereço IP está em branco. Digite um IP.");
+      }
+      
+      if(portNumInput==""){
+        println("O campo do número da porta está em branco. Digite um número de porta.");
+      }
+      
+      mainSocket = connectToESP32(ipAddrInput, portNumInput);
+      
+      if(mainSocket == null){
+        println("Digite novamente o IP e o número da porta.");
+      }
     }
+  }
+}
+
+Socket connectToESP32(String ipAddress, String port){
+  int serverPort; // Porta do servidor as an integer
+  serverPort = Integer.parseInt(port); // Convert the port to an integer
+  try {
+    Socket socket; // Cliente WiFi
+    InetAddress serverAddr = InetAddress.getByName(ipAddress);
+    socket = new Socket(serverAddr, serverPort); // Connect to the server
+    return socket;
+  } 
+  catch (IOException e) {
+    println("Erro ao conectar ao servidor: " + e.getMessage());
+    return null; // Return null in case of an error
   }
 }
