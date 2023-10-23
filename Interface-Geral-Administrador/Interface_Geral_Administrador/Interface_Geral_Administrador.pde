@@ -23,8 +23,6 @@ class User {
   float x, y;
   boolean isHovered = false;
   boolean isClicked = false;
-  //int realTimeHeartRate;
-  //String realTimeBloodPressure;
 
   User(String name, float x, float y) {
     this.name = name;
@@ -33,20 +31,33 @@ class User {
   }
 
   void display() {
-  fill(isHovered ? color(255, 100, 100) : (isClicked ? color(255, 100, 100) : color(200)));
-  rect(x, y, 400, rowHeight);
+    fill(isHovered ? color(255, 100, 100) : (isClicked ? color(255, 100, 100) : color(200)));
+    rect(x, y, 400, rowHeight);
 
-  fill(0);
-  textAlign(LEFT, CENTER);
-  textSize(28);
-  text(name, x + 10, y + 10);
+    fill(0);
+    textAlign(LEFT, CENTER);
+    textSize(28);
+    text(name, x + 10, y + 10);
 
-  //if (true/*isHovered || isClicked*/) {
     textSize(18);
-    text("Heart Rate: " + int(random(60, 100)) + " bpm", x + 10, y + 40);
-    text("Blood Pressure: " + int(random(90, 140)) + "/" + int(random(60, 90)) + " mmHg", x + 10, y + 70);
-  //}
-}
+    // Substitua estas linhas pelo envio dos valores ao Serial
+    int heartRate = int(random(60, 100));
+    String bloodPressure = int(random(90, 140)) + "/" + int(random(60, 90)) + " mmHg";
+    text("Heart Rate: " + heartRate + " bpm", x + 10, y + 40);
+    text("Blood Pressure: " + bloodPressure, x + 10, y + 70);
+    
+    // Envie os valores ao Serial
+    sendToSerial(heartRate, bloodPressure);
+  }
+
+  void sendToSerial(int heartRate, String bloodPressure) {
+    String data = "Heart Rate: " + heartRate + " bpm, Blood Pressure: " + bloodPressure;
+    // Envie os dados ao Serial (substitua a porta COMx pela sua porta)
+    //Serial myPort = new Serial(this, "COMx");
+    //myPort.write(data);
+    //myPort.stop();
+    println("Dados enviados ao Serial: " + data);
+  }
 
   void checkHover(float mx, float my) {
     isHovered = (mx > x && mx < x + 400 && my > y && my < y + rowHeight);
@@ -68,9 +79,8 @@ void setup() {
   size(1400, 800);
   numRows = 10;
   maxVisibleRows = (height / rowHeight) - 2;
-  //maxVisibleRows = height / rowHeight;
-  //println(maxVisibleRows);
-  // Initialize users and add User objects with dummy data
+  
+  // Inicialize users e adicione objetos User com dados fictícios
   for (int i = 1; i <= numRows; i++) {
     User user = new User("Elderly User " + i, 200, 150 + (i - 1) * rowHeight);
     users.add(user);
@@ -102,7 +112,6 @@ void draw() {
       }
     }
   } else {
-    // Check for data from esp32 and send to nodemcu
     if (esp32Client.available() > 0) {
       String data = esp32Client.readString();
       if (data != null) {
@@ -113,39 +122,30 @@ void draw() {
     }
   }
   
-  background(220);
+  background(240);
   
-  // Display a title above the column of rectangles
   fill(0);
   textAlign(CENTER, CENTER);
   textSize(36);
   text("Monitoramento de Idosos - Visão de administrador", width / 2, 50);
   
-  // Display patients in the visible area
   for (int i = 0; i < maxVisibleRows; i++) {
     int rowIndex = i + viewportY / rowHeight;
     if (rowIndex < numRows) {
       User user = new User("Elderly User " + (rowIndex + 1), 200, 150 + i * rowHeight);
-      user.checkHover(mouseX, mouseY); // Check for hover
+      user.checkHover(mouseX, mouseY);
       user.display();
-
-      // If user is clicked, add to the list of clicked users
       if (user.isClicked && !clickedUsers.contains(user)) {
         clickedUsers.add(user);
       } else if (!user.isClicked && clickedUsers.contains(user)) {
-        // If user is unclicked, remove from the list of clicked users
         clickedUsers.remove(user);
       }
     }
   }
 
-  // Scroll Up button
   displayArrowButton(75, 75, true);
-
-  // Scroll Down button
   displayArrowButton(75, height - 75, false);
   
-  // Display data for clicked users
   for (User user : clickedUsers) {
     user.display();
   }
@@ -174,16 +174,15 @@ void mousePressed() {
     } else if (mouseY > height - 100 && mouseY < height) {
       scroll(1);
     } else {
-      // Check for user click
       for (User user : users) {
         if (mouseX > user.x && mouseX < user.x + 400 && mouseY > user.y && mouseY < user.y + rowHeight) {
           if (user.isClicked) {
-            user.isClicked = false;  // Toggle the click state
+            user.isClicked = false;
           } else {
             user.isClicked = true;
           }
         } else {
-          user.isClicked = false;  // Deselect other users
+          user.isClicked = false;
         }
       }
     }
@@ -191,6 +190,5 @@ void mousePressed() {
 }
 
 void scroll(int dir) {
-  // Update the viewport based on the scroll direction
   viewportY = constrain(viewportY + dir * rowHeight, 0, (numRows - maxVisibleRows) * rowHeight);
 }
