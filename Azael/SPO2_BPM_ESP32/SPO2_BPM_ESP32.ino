@@ -123,6 +123,8 @@ void loop() {
         beatAvg = 0;//計算平均值
         for (byte x = 0 ; x < RATE_SIZE ; x++) beatAvg += rates[x];
         beatAvg /= RATE_SIZE;
+
+
       }
     }
 
