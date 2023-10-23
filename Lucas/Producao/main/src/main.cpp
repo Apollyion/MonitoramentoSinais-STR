@@ -111,10 +111,10 @@ portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
 PulseSensorPlayground pulseSensor;
 
 
-const int PULSE_INPUT = A0;
-const int PULSE_BLINK = 13;    
-const int PULSE_FADE = 5;
-const int THRESHOLD = 685;   // Ajustar o valor caso tenha ruído
+const int PULSE_INPUT = 4; // Pino de entrada do sensor
+const int PULSE_BLINK = 13; // FIXME - Não está sendo usado
+const int PULSE_FADE = 5; // FIXME - Não está sendo usado
+const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
 
 
 // Pulse Sensor Read function
@@ -133,8 +133,10 @@ int getBPM() {
 // DEFINICOES DO WIFI:
 #include <WiFi.h>
 
+// TODO - Alterar para o SSID e senha da rede
 const char* ssid = "NOME_DA_REDE"; // SSID da rede WiFi
 const char* password = "SENHA_DA_REDE"; // Senha da rede WiFi
+// TODO - Alterar para o IP e porta do servidor
 const char* serverIP = "192.168.0.106"; // Endereço IP do servidor
 int serverPort = 12345; // Porta do servidor
 
@@ -287,6 +289,5 @@ void loop() {
     }
 
 }
-
 
 
