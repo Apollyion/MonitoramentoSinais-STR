@@ -103,25 +103,52 @@ bool detectFall() {
 
 
 // ***INICIO CONFIGURACOES DO PULSE SENSOR***
-#define USE_ARDUINO_INTERRUPTS false
+hw_timer_t * sampleTimer = NULL;
+portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
+#define USE_ARDUINO_INTERRUPTS true
+//#define NO_PULSE_SENSOR_SERIAL true
 #include <PulseSensorPlayground.h>
-
-const int OUTPUT_TYPE = SERIAL_PLOTTER;
-const int PULSE_INPUT = 35;
-const int THRESHOLD = 2000;
 PulseSensorPlayground pulseSensor;
-const byte SAMPLES_PER_SERIAL_SAMPLE = 1;
-byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
 
-
-int getBpmSample(){
-    if (pulseSensor.sawNewSample()) {
-        return pulseSensor.getBeatsPerMinute();
-    } else {
-        return 0;
-    }
-
+void IRAM_ATTR onSampleTime() {
+  portENTER_CRITICAL_ISR(&sampleTimerMux);
+    PulseSensorPlayground::OurThis->onSampleTime();
+  portEXIT_CRITICAL_ISR(&sampleTimerMux);
 }
+const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
+
+void setupPulse(){
+    analogReadResolution(10);    
+    /*  Configure the PulseSensor manager  */
+    pulseSensor.analogInput(35);
+    pulseSensor.setSerial(Serial);
+    pulseSensor.setThreshold(THRESHOLD);
+}
+
+
+//-----------------------------------------------------------------
+
+// #define USE_ARDUINO_INTERRUPTS false
+// #include <PulseSensorPlayground.h>
+
+// const int OUTPUT_TYPE = SERIAL_PLOTTER;
+// const int PULSE_INPUT = 35;
+// const int THRESHOLD = 2300;
+// PulseSensorPlayground pulseSensor;
+// const byte SAMPLES_PER_SERIAL_SAMPLE = 1;
+// byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
+
+
+// int getBpmSample(){
+//     if (pulseSensor.sawNewSample()) {
+//         int latest = pulseSensor.getBeatsPerMinute();
+//         pulseSensor.getLatestSample();
+//         return latest;
+//     }
+
+// }
+
+//--------------------------------------------------------------------------
 
 
 
@@ -225,10 +252,9 @@ void IRAM_ATTR trataInterrupcao() {
 
 void setup() {
     Serial.begin(115200);
+
     // MPU setup
-    // Wire.begin();
-    // Wire.beginTransmission(MPU_addr);
-    // Wire.write(0x6B);
+
     Wire.begin(SDA,SCL);
     mpu6050.begin();
     mpu6050.calcGyroOffsets(true);
@@ -237,16 +263,14 @@ void setup() {
 
 
     // PULSE SENSOR SETUP:
-    pulseSensor.analogInput(PULSE_INPUT);
-
-    pulseSensor.setSerial(Serial);
-    pulseSensor.setOutputType(OUTPUT_TYPE);
-    pulseSensor.setThreshold(THRESHOLD);
-
-
-
-    // analogReadResolution(10);
+    setupPulse();
+    sampleTimer = timerBegin(0, 80, true);                
+    timerAttachInterrupt(sampleTimer, &onSampleTime, true);  
+    timerAlarmWrite(sampleTimer, 2000, true);      
+    timerAlarmEnable(sampleTimer);
     // pulseSensor.analogInput(PULSE_INPUT);
+    // pulseSensor.setSerial(Serial);
+    // pulseSensor.setOutputType(OUTPUT_TYPE);
     // pulseSensor.setThreshold(THRESHOLD);
 
 
@@ -316,25 +340,21 @@ void loop() {
     // Executar tarefa do Pulse Sensor
     if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR && !pulseSensorExecuted) {
         lastExecutedPulseSensor = agora;
-        bpmPulse = getBpmSample();
-        Serial.println(bpmPulse);
-        pulseSensorExecuted = true;
+        if (pulseSensor.sawStartOfBeat()) {
+            bpmPulse = pulseSensor.getBeatsPerMinute();
+        }
     }
+    
 
     // Executar tarefa do WiFi
     if (agora - lastExecutedWifi >= PERIODO_WIFI) {
         lastExecutedWifi = agora;
         handleWiFiConnection(); //XTODO - Remover comentario
         sprintf(packet, "%d %d %d", bpmPulse, valFall, botaoPressionado);
-
-        Serial.printf("BOTAO: %d\n", (digitalRead(BOTAO_PINO)));
-
         send_event(packet);
         //Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
-        digitalWrite(2, LOW);
-
         mpuExecuted, pulseSensorExecuted = false;
     }
 
