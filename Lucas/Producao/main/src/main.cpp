@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-// ****INICIO CONFIGURACOES DO MPU**** 
-// DEFINICOES DO MPU 
+// ***INICIO CONFIGURACOES DO MPU*** 
+// DEFINICOES DO MPU
+#include <MPU6050_tockn.h>
+MPU6050 mpu6050(Wire); 
 const int MPU_addr=0x68;
 int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
 float ax=0, ay=0, az=0, gx=0, gy=0, gz=0;
@@ -33,12 +35,12 @@ void mpu_read() {
 // Function to detect fall
 bool detectFall() {
     mpu_read();
-    ax = (AcX-2050)/16384.00;
-    ay = (AcY-77)/16384.00;
-    az = (AcZ-1947)/16384.00;
-    gx = (GyX+270)/131.07;
-    gy = (GyY-351)/131.07;
-    gz = (GyZ+136)/131.07;
+    ax = (AcX)/16384.00;
+    ay = (AcY)/16384.00;
+    az = (AcZ)/16384.00;
+    gx = (GyX)/131.0;
+    gy = (GyY)/131.0;
+    gz = (GyZ)/131.0;
     float Raw_Amp = pow(pow(ax,2)+pow(ay,2)+pow(az,2),0.5);
     int Amp = Raw_Amp * 10;
 
@@ -97,47 +99,69 @@ bool detectFall() {
     return false;
 }
 
-// }*****FIM DAS CONFIGURACOES DO MPU****
+// }****FIM DAS CONFIGURACOES DO MPU***
 
 
-// ****INICIO CONFIGURACOES DO PULSE SENSOR****
-// DEFINICOES DO PULSE SENSOR:
-hw_timer_t * sampleTimer = NULL;
-portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
-#define USE_ARDUINO_INTERRUPTS true
-//#define NO_PULSE_SENSOR_SERIAL true
-
+// ***INICIO CONFIGURACOES DO PULSE SENSOR***
+#define USE_ARDUINO_INTERRUPTS false
 #include <PulseSensorPlayground.h>
+
+const int OUTPUT_TYPE = SERIAL_PLOTTER;
+const int PULSE_INPUT = 35;
+const int THRESHOLD = 2000;
 PulseSensorPlayground pulseSensor;
+const byte SAMPLES_PER_SERIAL_SAMPLE = 1;
+byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
 
 
-const int PULSE_INPUT = 4; // Pino de entrada do sensor
-const int PULSE_BLINK = 13; // FIXME - Não está sendo usado
-const int PULSE_FADE = 5; // FIXME - Não está sendo usado
-const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
+int getBpmSample(){
+    if (pulseSensor.sawNewSample()) {
+        return pulseSensor.getBeatsPerMinute();
+    } else {
+        return 0;
+    }
 
-
-// Pulse Sensor Read function
-int getBPM() {
-  if (pulseSensor.sawStartOfBeat()) {
-    return pulseSensor.getBeatsPerMinute();
-  } else {
-    return 0;
-  }
 }
 
-// *****FIM DAS CONFIGURACOES DO PULSE SENSOR****
 
 
-// ****INICIO CONFIGURACOES DO WIFI****
+// // DEFINICOES DO PULSE SENSOR:
+// hw_timer_t * sampleTimer = NULL;
+// portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
+// #define USE_ARDUINO_INTERRUPTS true
+// //#define NO_PULSE_SENSOR_SERIAL true
+
+// #include <PulseSensorPlayground.h>
+// PulseSensorPlayground pulseSensor;
+
+
+// const int PULSE_INPUT = 35; // Pino de entrada do sensor
+// const int PULSE_BLINK = 13; // FIXME - Não está sendo usado
+// const int PULSE_FADE = 5; // FIXME - Não está sendo usado
+// const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
+
+
+// // Pulse Sensor Read function
+// int getBPM() {
+//   if (pulseSensor.sawStartOfBeat()) {
+//     return pulseSensor.getBeatsPerMinute();
+//   } else {
+//     return 0;
+//   }
+// }
+
+// ****FIM DAS CONFIGURACOES DO PULSE SENSOR***
+
+
+// ***INICIO CONFIGURACOES DO WIFI***
 // DEFINICOES DO WIFI:
 #include <WiFi.h>
 
 // TODO - Alterar para o SSID e senha da rede
-const char* ssid = "NOME_DA_REDE"; // SSID da rede WiFi
-const char* password = "SENHA_DA_REDE"; // Senha da rede WiFi
+const char* ssid = "AcerAmigo"; // SSID da rede WiFi
+const char* password = "senhafacil"; // Senha da rede WiFi
 // TODO - Alterar para o IP e porta do servidor
-const char* serverIP = "192.168.0.106"; // Endereço IP do servidor
+const char* serverIP = "192.168.0.14"; // Endereço IP do servidor
 int serverPort = 12345; // Porta do servidor
 
 WiFiClient client;
@@ -181,11 +205,11 @@ void handleWiFiConnection() {
 
 
 
-// *****FIM DAS CONFIGURACOES DO WIFI****
+// ****FIM DAS CONFIGURACOES DO WIFI***
 
 // ***** CONFIGURACAO DO BOTAO INTERRUPTOR *****
 // DEFINICOES DO BOTAO INTERRUPTOR:
-#define BOTAO_PINO 2 // Define o pino do botão
+#define BOTAO_PINO 21 // Define o pino do botão
 volatile bool botaoPressionado = false; // Variável que será alterada pela interrupção
 
 // Função de tratamento de interrupção
@@ -196,25 +220,39 @@ void IRAM_ATTR trataInterrupcao() {
 // ***** FIM DAS CONFIGURACOES DO BOTAO INTERRUPTOR *****
 
 
+#define SDA 13
+#define SCL 14
+
 void setup() {
     Serial.begin(115200);
     // MPU setup
-    Wire.begin();
-    Wire.beginTransmission(MPU_addr);
-    Wire.write(0x6B);
+    // Wire.begin();
+    // Wire.beginTransmission(MPU_addr);
+    // Wire.write(0x6B);
+    Wire.begin(SDA,SCL);
+    mpu6050.begin();
+    mpu6050.calcGyroOffsets(true);
     Wire.write(0);
     Wire.endTransmission(true);
 
 
     // PULSE SENSOR SETUP:
-    analogReadResolution(10);
     pulseSensor.analogInput(PULSE_INPUT);
+
+    pulseSensor.setSerial(Serial);
+    pulseSensor.setOutputType(OUTPUT_TYPE);
     pulseSensor.setThreshold(THRESHOLD);
+
+
+
+    // analogReadResolution(10);
+    // pulseSensor.analogInput(PULSE_INPUT);
+    // pulseSensor.setThreshold(THRESHOLD);
 
 
     // WIFI SETUP:
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
+    while (WiFi.status() != WL_CONNECTED) { //XTODO: Remover comentario
         delay(500);
         Serial.print(".");
     }
@@ -223,11 +261,10 @@ void setup() {
     Serial.println("Endereço IP: ");
     Serial.println(WiFi.localIP());
 
-
     // BOTAO INTERRUPTOR SETUP:
-    pinMode(BOTAO_PINO, INPUT_PULLUP);
+    pinMode(BOTAO_PINO,PULLUP);
     // Configurar interrupção no pino
-    attachInterrupt(digitalPinToInterrupt(BOTAO_PINO), trataInterrupcao, RISING);
+    attachInterrupt(digitalPinToInterrupt(BOTAO_PINO), trataInterrupcao, FALLING);
 
 }
 
@@ -238,7 +275,7 @@ void setup() {
 // Definir os períodos (ms) das tarefas
 #define PERIODO_MPU 100
 #define PERIODO_PULSE_SENSOR 200
-#define PERIODO_WIFI 100
+#define PERIODO_WIFI 500
 
 // Definir os tempos de execução (ms) das tarefas
 unsigned long lastExecutedMPU = 0;
@@ -251,43 +288,54 @@ bool valFall;
 unsigned int bpmPulse;
 char packet[50];
 
+bool mpuExecuted = false;
+bool pulseSensorExecuted = false;
+bool cicloComplete = false;
+
 void loop() {
     unsigned long agora = millis();
     
     // Executar tafefa do botao
     if (botaoPressionado) {
-        handleWiFiConnection();
+        handleWiFiConnection(); // XTODO: Remover Comentario
         sprintf(packet, "%d %d %d", bpmPulse, valFall, botaoPressionado);
         send_event(packet);
-        Serial.println(packet);
+        //Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
     }
 
 
     // Executar tarefa do MPU
-    if (agora - lastExecutedMPU >= PERIODO_MPU) {
+    if (agora - lastExecutedMPU >= PERIODO_MPU && !cicloComplete) {
         lastExecutedMPU = agora;
         valFall = detectFall();
+        mpuExecuted = true;
     }
 
     // Executar tarefa do Pulse Sensor
-    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR) {
+    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR && !pulseSensorExecuted) {
         lastExecutedPulseSensor = agora;
-        bpmPulse = getBPM();
+        bpmPulse = getBpmSample();
+        Serial.println(bpmPulse);
+        pulseSensorExecuted = true;
     }
 
     // Executar tarefa do WiFi
     if (agora - lastExecutedWifi >= PERIODO_WIFI) {
         lastExecutedWifi = agora;
-        handleWiFiConnection();
+        handleWiFiConnection(); //XTODO - Remover comentario
         sprintf(packet, "%d %d %d", bpmPulse, valFall, botaoPressionado);
+
+        Serial.printf("BOTAO: %d\n", (digitalRead(BOTAO_PINO)));
+
         send_event(packet);
-        Serial.println(packet);
+        //Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
+        digitalWrite(2, LOW);
+
+        mpuExecuted, pulseSensorExecuted = false;
     }
 
 }
-
-
