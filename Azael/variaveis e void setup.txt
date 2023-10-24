@@ -1,0 +1,57 @@
+// Variables for heart rate calculation
+const byte RATE_SIZE = 4; // What is the average quantity
+byte rates[RATE_SIZE];    // heartbeat array
+byte rateSpot = 0;
+long lastBeat = 0; // Time at which the last beat occurred
+float beatsPerMinute;
+int beatAvg;
+
+// Variables for blood oxygen calculation
+double avered = 0;
+double aveir = 0;
+double sumirrms = 0;
+double sumredrms = 0;
+
+double SpO2 = 0;
+double ESpO2 = 90.0; // Initial value
+double FSpO2 = 0.7;  // filter factor for estimated SpO2
+double frate = 0.95; // low pass filter for IR/red LED value to eliminate AC component
+int i = 0;
+int Num = 30;             // Calculate once every 30 samples
+#define FINGER_ON 7000    // Minimum infrared value (detecting finger presence)
+#define MINIMUM_SPO2 90.0 // Minimum blood oxygen level
+
+byte ledBrightness = 0x7F; // recommended =127, Options: 0=Off to 255=50mA
+byte sampleAverage = 4;    // Options: 1, 2, 4, 8, 16, 32
+byte ledMode = 2;          // Options: 1 = Red only(心跳), 2 = Red + IR(血氧)
+int sampleRate = 800;      // Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
+int pulseWidth = 215;      // Options: 69, 118, 215, 411
+int adcRange = 16384;      // Options: 2048, 4096, 8192, 16384
+// Set up the wanted parameters
+
+int result[2]; //variavel que vai guardar o beatAvg e o SPo2
+
+// VOID SETUP
+//
+//
+//
+//
+//
+//
+
+void setup()
+{
+
+  // Check if the MAX30102 sensor is available
+  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) // Use default I2C port, 400kHz speed
+  {
+    // Serial.println("MAX30102 não encontrado"); // sensor not found
+    while (1)
+      ;
+  }
+  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); // Configure sensor with these settings
+  particleSensor.enableDIETEMPRDY();
+
+  particleSensor.setPulseAmplitudeRed(0x0A); // Turn Red LED to low to indicate sensor is running
+  particleSensor.setPulseAmplitudeGreen(0);  // Turn off Green LED
+}
