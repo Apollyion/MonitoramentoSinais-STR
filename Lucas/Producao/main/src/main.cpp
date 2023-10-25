@@ -103,53 +103,27 @@ bool detectFall() {
 
 
 // ****INICIO CONFIGURACOES DO PULSE SENSOR****
-#define USE_ARDUINO_INTERRUPTS false
+hw_timer_t * sampleTimer = NULL;
+portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
+#define USE_ARDUINO_INTERRUPTS true
+//#define NO_PULSE_SENSOR_SERIAL true
 #include <PulseSensorPlayground.h>
-
-const int OUTPUT_TYPE = SERIAL_PLOTTER;
-const int PULSE_INPUT = 35;
-const int THRESHOLD = 2000;
 PulseSensorPlayground pulseSensor;
-const byte SAMPLES_PER_SERIAL_SAMPLE = 10;
-byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
 
-
-int getBpmSample(){
-    if (pulseSensor.sawNewSample()) {
-        return pulseSensor.getBeatsPerMinute();
-    } else {
-        return 0;
-    }
-
+void IRAM_ATTR onSampleTime() {
+  portENTER_CRITICAL_ISR(&sampleTimerMux);
+    PulseSensorPlayground::OurThis->onSampleTime();
+  portEXIT_CRITICAL_ISR(&sampleTimerMux);
 }
+const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
 
-
-
-// // DEFINICOES DO PULSE SENSOR:
-// hw_timer_t * sampleTimer = NULL;
-// portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
-// #define USE_ARDUINO_INTERRUPTS true
-// //#define NO_PULSE_SENSOR_SERIAL true
-
-// #include <PulseSensorPlayground.h>
-// PulseSensorPlayground pulseSensor;
-
-
-// const int PULSE_INPUT = 35; // Pino de entrada do sensor
-// const int PULSE_BLINK = 13; // FIXME - Não está sendo usado
-// const int PULSE_FADE = 5; // FIXME - Não está sendo usado
-// const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
-
-
-// // Pulse Sensor Read function
-// int getBPM() {
-//   if (pulseSensor.sawStartOfBeat()) {
-//     return pulseSensor.getBeatsPerMinute();
-//   } else {
-//     return 0;
-//   }
-// }
-
+void setupPulse(){
+    analogReadResolution(10);    
+    /*  Configure the PulseSensor manager  */
+    pulseSensor.analogInput(35);
+    pulseSensor.setSerial(Serial);
+    pulseSensor.setThreshold(THRESHOLD);
+}
 // *****FIM DAS CONFIGURACOES DO PULSE SENSOR****
 
 
@@ -158,10 +132,10 @@ int getBpmSample(){
 #include <WiFi.h>
 
 // TODO - Alterar para o SSID e senha da rede
-const char* ssid = "NOME_DA_REDE"; // SSID da rede WiFi
-const char* password = "SENHA_DA_REDE"; // Senha da rede WiFi
+const char* ssid = "AcerAmigo"; // SSID da rede WiFi
+const char* password = "senhafacil"; // Senha da rede WiFi
 // TODO - Alterar para o IP e porta do servidor
-const char* serverIP = "192.168.0.106"; // Endereço IP do servidor
+const char* serverIP = "192.168.0.129"; // Endereço IP do servidor
 int serverPort = 12345; // Porta do servidor
 
 WiFiClient client;
@@ -380,8 +354,11 @@ int getBeatAvg() // FUNCAO RETORNA O BeatAvg
         rates[rateSpot++] = (byte)beatsPerMinute; // Array to store heartbeat values
         rateSpot %= RATE_SIZE;
         beatAvg = 0; // Calculate average
-        for (byte x = 0; x < RATE_SIZE; x++)
+        for (byte x = 0; x < RATE_SIZE; x++){
+          Serial.println(rates[x]);
           beatAvg += rates[x];
+        }
+
         beatAvg /= RATE_SIZE;
       }
     }
@@ -463,12 +440,11 @@ void setup() {
     Wire.endTransmission(true);
 
 
-    // PULSE SENSOR SETUP:
-    pulseSensor.analogInput(PULSE_INPUT);
-
-    pulseSensor.setSerial(Serial);
-    pulseSensor.setOutputType(OUTPUT_TYPE);
-    pulseSensor.setThreshold(THRESHOLD);
+    setupPulse();
+        sampleTimer = timerBegin(0, 80, true);                
+        timerAttachInterrupt(sampleTimer, &onSampleTime, true);  
+        timerAlarmWrite(sampleTimer, 2000, true);      
+        timerAlarmEnable(sampleTimer);
 
 
 
@@ -499,7 +475,7 @@ void setup() {
     // Check if the MAX30102 sensor is available
     if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) // Use default I2C port, 400kHz speed
     {
-        // Serial.println("MAX30102 não encontrado"); // sensor not found
+        Serial.println("MAX30102 não encontrado"); // sensor not found
         while (1)
             ;
     }
@@ -518,7 +494,7 @@ void setup() {
 // Definir os períodos (ms) das tarefas
 #define PERIODO_MPU 100
 #define PERIODO_PULSE_SENSOR 200
-#define PERIODO_WIFI 100
+#define PERIODO_WIFI 500
 #define PERIODO_MAX 20
 
 // Definir os tempos de execução (ms) das tarefas
@@ -536,6 +512,13 @@ unsigned int maxPulse;
 double spo2;
 unsigned int avgBPM;
 
+
+bool maxExecuted = false;
+bool mpuExecuted = false;
+bool pulseSensorExecuted = false;
+bool cicloComplete = false;
+
+
 void loop() {
     unsigned long agora = millis();
     
@@ -551,22 +534,25 @@ void loop() {
     }
 
     // Executar tarefa do MAX
-    if (agora - lastExecutedMax >= PERIODO_MAX) {
+    if (agora - lastExecutedMax >= PERIODO_MAX && !maxExecuted) {
         lastExecutedMax = agora;
         maxPulse = getBeatAvg();
         spo2 = getSpo2();
     }
 
     // Executar tarefa do MPU
-    if (agora - lastExecutedMPU >= PERIODO_MPU) {
+    if (agora - lastExecutedMPU >= PERIODO_MPU && !mpuExecuted) {
         lastExecutedMPU = agora;
         valFall = detectFall();
     }
 
     // Executar tarefa do Pulse Sensor
-    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR) {
+    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR && !pulseSensorExecuted) {
         lastExecutedPulseSensor = agora;
-        bpmPulse = getBpmSample();
+        if (pulseSensor.sawStartOfBeat()) {
+          bpmPulse = pulseSensor.getBeatsPerMinute();
+        }
+        Serial.printf("BPM: %d\n", bpmPulse);  // Exibir o BPM
     }
 
     // Executar tarefa do WiFi
@@ -575,11 +561,14 @@ void loop() {
         handleWiFiConnection();
         
         avgBPM = (bpmPulse + maxPulse) / 2;
-        sprintf(packet, "%d %f %d %d", bpmPulse, spo2, valFall, botaoPressionado);
+        sprintf(packet, "%d %f %d %d", avgBPM, spo2, valFall, botaoPressionado);
         send_event(packet);
-        Serial.println(packet);
+        //Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
+        maxExecuted = false;
+        mpuExecuted = false;
+        pulseSensorExecuted = false;
     }
 
 }
