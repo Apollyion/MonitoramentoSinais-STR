@@ -9,22 +9,30 @@ import g4p_controls.*;
 ControlP5 cp5;
 Button connectButton;
 Server server;
+PApplet parent; // Variável para acessar a classe principal PApplet
+
 
 int viewportY = 0;
 int rowHeight = 100;
 int numRows = 10;
 int maxVisibleRows;
+long lastStatusChangeTime = 0;
+int statusChangeDuration = 5000; // 5000 milissegundos (5 segundos)
+boolean isStatusChanging = false;
 
 class User {
   String name;
   float x, y;
   boolean isHovered = false;
   boolean isClicked = false;
+  int diametro = 30;  // Adicione o campo 'diametro' como um inteiro com valor inicial
+  boolean estado = false;  // Adicione o campo 'estado' como uma variável booleana com valor inicial
 
   User(String name, float x, float y) {
     this.name = name;
     this.x = x;
     this.y = y;
+    
   }
 
   void display() {
@@ -34,7 +42,8 @@ class User {
 
     fill(isClicked ? clickColor : (isHovered ? hoverColor : baseColor));
     rect(x, y, 400, rowHeight);
-
+    
+    
     fill(0);
     textAlign(LEFT, CENTER);
     textSize(24);
@@ -45,7 +54,35 @@ class User {
     String bloodPressure = int(random(90, 140)) + "/" + int(random(60, 90)) + " mmHg";
     text("Heart Rate: " + heartRate + " bpm", x + 10, y + 40);
     text("Blood Pressure: " + bloodPressure, x + 10, y + 70);
+    status(); // Chame o método status() sem passar argumentos.
   }
+  
+void status() {
+  // Calcule a posição do círculo com base na posição do texto "Blood Pressure" e "Heart Rate"
+  float circleX = x + 370; // Ajuste a posição X como desejar
+  float circleY = y + 80;  // Ajuste a posição Y como desejar
+  
+// Verifique se o mouse está sobre o círculo
+  boolean isMouseOverCircle = dist(mouseX, mouseY, circleX, circleY) < diametro / 2;
+
+  // Se o mouse estiver sobre o círculo e ele foi clicado, inverta o estado
+  if (isMouseOverCircle && mousePressed) {
+    // Inverta o estado da elipse
+    estado = !estado;
+  }
+
+  // Use a variável "elipseVermelha" para determinar a cor do círculo
+  if (estado) {
+    fill(200, 0, 0);  // Vermelho
+  } else {
+    fill(0, 255, 0);  // Verde
+  }
+
+  // Desenhe o círculo
+  ellipse(circleX, circleY, diametro, diametro);
+}
+
+
 
   void checkHover(float mx, float my) {
     isHovered = (mx > x && mx < x + 400 && my > y && my < y + rowHeight);
@@ -58,6 +95,7 @@ ArrayList<User> clickedUsers = new ArrayList<User>();
 int port = 12345;
 Client esp32Client = null;
 Client nodemcuClient = null;
+
 
 void setup() {
   server = new Server(this, port);
@@ -84,12 +122,14 @@ void setup() {
     public void controlEvent(ControlEvent theEvent) {
       if (theEvent.getController() == connectButton) {
         println("IDOSO X NO CHÃO!!!!");
+        
       }
     }
   });
 }
 
 void draw() {
+
   if (esp32Client == null || !esp32Client.active()) {
     esp32Client = null;
   }
@@ -123,7 +163,7 @@ void draw() {
       }
     }
   }
-
+  
   background(255);
 
   fill(0);
@@ -151,6 +191,8 @@ void draw() {
   for (User user : clickedUsers) {
     user.display();
   }
+   
+  
 }
 
 void displayArrowButton(float x, float y, boolean isUp) {
