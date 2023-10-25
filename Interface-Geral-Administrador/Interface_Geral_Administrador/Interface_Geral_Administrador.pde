@@ -4,18 +4,15 @@ import controlP5.*;
 import java.net.*;
 import java.io.*;
 import processing.core.PApplet;
+import g4p_controls.*;
 
-ControlP5 cp5;               // Declare a ControlP5 object for creating GUI elements
-Textfield ipAddressInput;    // Declare a Textfield for entering an IP address
-Textfield portInput;         // Declare a Textfield for entering a port number
-Button connectButton;        // Declare a Button for triggering a connection
-Socket mainSocket;
-
+ControlP5 cp5;
+Button connectButton;
 Server server;
 
 int viewportY = 0;
 int rowHeight = 100;
-int numRows = 10; // Replace 'rows' with 'numRows'
+int numRows = 10;
 int maxVisibleRows;
 
 class User {
@@ -31,32 +28,23 @@ class User {
   }
 
   void display() {
-    fill(isHovered ? color(255, 100, 100) : (isClicked ? color(255, 100, 100) : color(200)));
+    int baseColor = color(240); // Cor de fundo base
+    int hoverColor = color(255, 100, 100); // Cor de fundo ao passar o mouse
+    int clickColor = color(200); // Cor de fundo ao clicar
+
+    fill(isClicked ? clickColor : (isHovered ? hoverColor : baseColor));
     rect(x, y, 400, rowHeight);
 
     fill(0);
     textAlign(LEFT, CENTER);
-    textSize(28);
+    textSize(24);
     text(name, x + 10, y + 10);
 
     textSize(18);
-    // Substitua estas linhas pelo envio dos valores ao Serial
     int heartRate = int(random(60, 100));
     String bloodPressure = int(random(90, 140)) + "/" + int(random(60, 90)) + " mmHg";
     text("Heart Rate: " + heartRate + " bpm", x + 10, y + 40);
     text("Blood Pressure: " + bloodPressure, x + 10, y + 70);
-    
-    // Envie os valores ao Serial
-    sendToSerial(heartRate, bloodPressure);
-  }
-
-  void sendToSerial(int heartRate, String bloodPressure) {
-    String data = "Heart Rate: " + heartRate + " bpm, Blood Pressure: " + bloodPressure;
-    // Envie os dados ao Serial (substitua a porta COMx pela sua porta)
-    //Serial myPort = new Serial(this, "COMx");
-    //myPort.write(data);
-    //myPort.stop();
-    println("Dados enviados ao Serial: " + data);
   }
 
   void checkHover(float mx, float my) {
@@ -65,7 +53,7 @@ class User {
 }
 
 ArrayList<User> users = new ArrayList<User>();
-ArrayList<User> clickedUsers = new ArrayList<User>(); // Store clicked users
+ArrayList<User> clickedUsers = new ArrayList<User>();
 
 int port = 12345;
 Client esp32Client = null;
@@ -73,18 +61,32 @@ Client nodemcuClient = null;
 
 void setup() {
   server = new Server(this, port);
-  String serverIP = server.ip();
-  println("Endereço IP do servidor: " + serverIP);
-  
+  cp5 = new ControlP5(this);
   size(1400, 800);
   numRows = 10;
   maxVisibleRows = (height / rowHeight) - 2;
-  
-  // Inicialize users e adicione objetos User com dados fictícios
+
   for (int i = 1; i <= numRows; i++) {
     User user = new User("Elderly User " + i, 200, 150 + (i - 1) * rowHeight);
     users.add(user);
   }
+
+  connectButton = cp5.addButton("Connect")
+    .setPosition(900, 310)
+    .setSize(300, 80)
+    .setCaptionLabel("Queda!!!")
+    .setColorCaptionLabel(color(255))
+    .setColorBackground(color(220, 0, 0))
+    .setColorActive(color(200, 0, 0))
+    .setFont(createFont("Arial", 32));
+
+  connectButton.addListener(new ControlListener() {
+    public void controlEvent(ControlEvent theEvent) {
+      if (theEvent.getController() == connectButton) {
+        println("IDOSO X NO CHÃO!!!!");
+      }
+    }
+  });
 }
 
 void draw() {
@@ -121,14 +123,14 @@ void draw() {
       }
     }
   }
-  
-  background(240);
-  
+
+  background(255);
+
   fill(0);
   textAlign(CENTER, CENTER);
   textSize(36);
-  text("Monitoramento de Idosos - Visão de administrador", width / 2, 50);
-  
+  text("Monitoramento de Idosos - Visão de Administrador", width / 2, 50);
+
   for (int i = 0; i < maxVisibleRows; i++) {
     int rowIndex = i + viewportY / rowHeight;
     if (rowIndex < numRows) {
@@ -145,23 +147,14 @@ void draw() {
 
   displayArrowButton(75, 75, true);
   displayArrowButton(75, height - 75, false);
-  
+
   for (User user : clickedUsers) {
     user.display();
   }
 }
 
-void displayUser(String name, float x, float y) {
-  fill(200);
-  rect(x, y, 400, rowHeight);
-  fill(0);
-  textAlign(LEFT, CENTER);
-  textSize(28);
-  text(name, x + 10, y + 10);
-}
-
 void displayArrowButton(float x, float y, boolean isUp) {
-  fill(200);
+  fill(220);
   ellipse(x, y, 50, 50);
   fill(0);
   triangle(x - 5, y - 10, x, isUp ? y - 15 : y - 5, x + 5, y - 10);
