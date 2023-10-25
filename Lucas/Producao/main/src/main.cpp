@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-// ***INICIO CONFIGURACOES DO MPU*** 
+// ****INICIO CONFIGURACOES DO MPU**** 
 // DEFINICOES DO MPU
 #include <MPU6050_tockn.h>
 MPU6050 mpu6050(Wire); 
@@ -99,56 +99,29 @@ bool detectFall() {
     return false;
 }
 
-// }****FIM DAS CONFIGURACOES DO MPU***
+// }*****FIM DAS CONFIGURACOES DO MPU****
 
 
-// ***INICIO CONFIGURACOES DO PULSE SENSOR***
-hw_timer_t * sampleTimer = NULL;
-portMUX_TYPE sampleTimerMux = portMUX_INITIALIZER_UNLOCKED;
-#define USE_ARDUINO_INTERRUPTS true
-//#define NO_PULSE_SENSOR_SERIAL true
+// ****INICIO CONFIGURACOES DO PULSE SENSOR****
+#define USE_ARDUINO_INTERRUPTS false
 #include <PulseSensorPlayground.h>
+
+const int OUTPUT_TYPE = SERIAL_PLOTTER;
+const int PULSE_INPUT = 35;
+const int THRESHOLD = 2000;
 PulseSensorPlayground pulseSensor;
+const byte SAMPLES_PER_SERIAL_SAMPLE = 10;
+byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
 
-void IRAM_ATTR onSampleTime() {
-  portENTER_CRITICAL_ISR(&sampleTimerMux);
-    PulseSensorPlayground::OurThis->onSampleTime();
-  portEXIT_CRITICAL_ISR(&sampleTimerMux);
+
+int getBpmSample(){
+    if (pulseSensor.sawNewSample()) {
+        return pulseSensor.getBeatsPerMinute();
+    } else {
+        return 0;
+    }
+
 }
-const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
-
-void setupPulse(){
-    analogReadResolution(10);    
-    /*  Configure the PulseSensor manager  */
-    pulseSensor.analogInput(35);
-    pulseSensor.setSerial(Serial);
-    pulseSensor.setThreshold(THRESHOLD);
-}
-
-
-//-----------------------------------------------------------------
-
-// #define USE_ARDUINO_INTERRUPTS false
-// #include <PulseSensorPlayground.h>
-
-// const int OUTPUT_TYPE = SERIAL_PLOTTER;
-// const int PULSE_INPUT = 35;
-// const int THRESHOLD = 2300;
-// PulseSensorPlayground pulseSensor;
-// const byte SAMPLES_PER_SERIAL_SAMPLE = 1;
-// byte samplesUntilReport = SAMPLES_PER_SERIAL_SAMPLE;
-
-
-// int getBpmSample(){
-//     if (pulseSensor.sawNewSample()) {
-//         int latest = pulseSensor.getBeatsPerMinute();
-//         pulseSensor.getLatestSample();
-//         return latest;
-//     }
-
-// }
-
-//--------------------------------------------------------------------------
 
 
 
@@ -177,18 +150,18 @@ void setupPulse(){
 //   }
 // }
 
-// ****FIM DAS CONFIGURACOES DO PULSE SENSOR***
+// *****FIM DAS CONFIGURACOES DO PULSE SENSOR****
 
 
-// ***INICIO CONFIGURACOES DO WIFI***
+// ****INICIO CONFIGURACOES DO WIFI****
 // DEFINICOES DO WIFI:
 #include <WiFi.h>
 
 // TODO - Alterar para o SSID e senha da rede
-const char* ssid = "AcerAmigo"; // SSID da rede WiFi
-const char* password = "senhafacil"; // Senha da rede WiFi
+const char* ssid = "NOME_DA_REDE"; // SSID da rede WiFi
+const char* password = "SENHA_DA_REDE"; // Senha da rede WiFi
 // TODO - Alterar para o IP e porta do servidor
-const char* serverIP = "192.168.0.14"; // Endereço IP do servidor
+const char* serverIP = "192.168.0.106"; // Endereço IP do servidor
 int serverPort = 12345; // Porta do servidor
 
 WiFiClient client;
@@ -232,7 +205,7 @@ void handleWiFiConnection() {
 
 
 
-// ****FIM DAS CONFIGURACOES DO WIFI***
+// *****FIM DAS CONFIGURACOES DO WIFI****
 
 // ***** CONFIGURACAO DO BOTAO INTERRUPTOR *****
 // DEFINICOES DO BOTAO INTERRUPTOR:
@@ -246,15 +219,243 @@ void IRAM_ATTR trataInterrupcao() {
 
 // ***** FIM DAS CONFIGURACOES DO BOTAO INTERRUPTOR *****
 
+// *** INICIO DAS CONFIGURACOES DO MAX ***
+
+#include <MAX30105.h>  //MAX3010x library
+#include "heartRate.h" //Heart rate calculating algorithm
+MAX30105 particleSensor;
+
+// Variables for heart rate calculation
+const byte RATE_SIZE = 4; // What is the average quantity
+byte rates[RATE_SIZE];    // heartbeat array
+byte rateSpot = 0;
+long lastBeat = 0; // Time at which the last beat occurred
+float beatsPerMinute;
+int beatAvg;
+
+// Variables for blood oxygen calculation
+double avered = 0;
+double aveir = 0;
+double sumirrms = 0;
+double sumredrms = 0;
+
+double SpO2 = 0;
+double ESpO2 = 90.0; // Initial value
+double FSpO2 = 0.7;  // filter factor for estimated SpO2
+double frate = 0.95; // low pass filter for IR/red LED value to eliminate AC component
+int i = 0;
+int Num = 30;             // Calculate once every 30 samples
+#define FINGER_ON 7000    // Minimum infrared value (detecting finger presence)
+#define MINIMUM_SPO2 90.0 // Minimum blood oxygen level
+
+byte ledBrightness = 0x7F; // recommended =127, Options: 0=Off to 255=50mA
+byte sampleAverage = 4;    // Options: 1, 2, 4, 8, 16, 32
+byte ledMode = 2;          // Options: 1 = Red only(心跳), 2 = Red + IR(血氧)
+int sampleRate = 800;      // Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
+int pulseWidth = 215;      // Options: 69, 118, 215, 411
+int adcRange = 16384;      // Options: 2048, 4096, 8192, 16384
+int sendBeat, sendSPo2; // variavel que vai guardar o beatAvg e o SPo2
+
+double getSpo2() // FUNCAO RETORNA O SPO2
+{
+  long irValue = particleSensor.getIR(); // Reading the IR value it will permit us to know if there's a finger on the sensor or not
+  // Check if a finger is placed
+  if (irValue > FINGER_ON)
+  {
+
+    // Check for a heartbeat and measure heart rate
+    if (checkForBeat(irValue) == true)
+    {
+      sendBeat = beatAvg;
+      // Serial.println(" BPM"); // Display heart rate value
+      //  Display blood oxygen value
+      if (beatAvg > 30)
+      {
+        return ESpO2;
+      }
+      else
+        ESpO2 = 0;
+
+      sendBeat = beatAvg;
+      long delta = millis() - lastBeat; // Calculate heart rate difference
+      lastBeat = millis();
+      beatsPerMinute = 60 / (delta / 1000.0); // Calculate average heart rate
+      if (beatsPerMinute < 255 && beatsPerMinute > 20)
+      {
+        // The heartbeat must be between 20-255
+        rates[rateSpot++] = (byte)beatsPerMinute; // Array to store heartbeat values
+        rateSpot %= RATE_SIZE;
+        beatAvg = 0; // Calculate average
+        for (byte x = 0; x < RATE_SIZE; x++)
+          beatAvg += rates[x];
+        beatAvg /= RATE_SIZE;
+      }
+    }
+
+    // Medir o oxigênio no sangue
+    uint32_t ir, red;
+    double fred, fir;
+    particleSensor.check(); // Check the sensor, read up to 3 samples
+    if (particleSensor.available())
+    {
+      i++;
+      ir = particleSensor.getFIFOIR();   // Ler infravermelho
+      red = particleSensor.getFIFORed(); // Leia a luz vermelha
+      // Serial.println("red=" + String(red) + ",IR=" + String(ir) + ",i=" + String(i));
+      fir = (double)ir;                                      // Convert double
+      fred = (double)red;                                    // Convert double
+      aveir = aveir * frate + (double)ir * (1.0 - frate);    // average IR level by low pass filter
+      avered = avered * frate + (double)red * (1.0 - frate); // average red level by low pass filter
+      sumirrms += (fir - aveir) * (fir - aveir);             // square sum of alternate component of IR level
+      sumredrms += (fred - avered) * (fred - avered);        // square sum of alternate component of red level
+
+      if ((i % Num) == 0)
+      {
+        double R = (sqrt(sumirrms) / aveir) / (sqrt(sumredrms) / avered);
+        SpO2 = -23.3 * (R - 0.4) + 100;
+        ESpO2 = FSpO2 * ESpO2 + (1.0 - FSpO2) * SpO2; // low pass filter
+        if (ESpO2 <= MINIMUM_SPO2)
+          ESpO2 = MINIMUM_SPO2; // indicator for finger detached
+        if (ESpO2 > 100)
+          ESpO2 = 99.9;
+        // Serial.print(",SPO2="); Serial.println(ESpO2);
+        sumredrms = 0.0;
+        sumirrms = 0.0;
+        SpO2 = 0;
+        i = 0;
+      }
+      particleSensor.nextSample(); // We're finished with this sample so move to next sample
+    }
+
+    // exibir dados em serial
+    sendBeat = beatAvg;
+    // Exibir o valor do oxigênio no sangue para evitar medições incorretas. É necessário exibir o oxigênio no sangue quando o batimento cardíaco excede 30
+    if (beatAvg > 30)
+      sendBeat = beatAvg;
+    else
+      return ESpO2;
+  }
+  // Nenhum dedo detectado, limpe todos os dados e conteúdo da tela "Finger Please"
+  else
+  {
+    // Limpar dados de batimentos cardíacos
+    for (byte rx = 0; rx < RATE_SIZE; rx++)
+      rates[rx] = 0;
+    beatAvg = 0;
+    rateSpot = 0;
+    lastBeat = 0;
+    // Limpar dados de oxigênio no sangue
+    avered = 0;
+    aveir = 0;
+    sumirrms = 0;
+    sumredrms = 0;
+    SpO2 = 0;
+    ESpO2 = 90.0;
+    // Exibição Finger Please
+    // Serial.println("Dedo não encontrado ");
+  }
+  return 1;
+}
+
+int getBeatAvg() // FUNCAO RETORNA O BeatAvg
+{
+  long irValue = particleSensor.getIR(); // Reading the IR value it will permit us to know if there's a finger on the sensor or not
+  // Check if a finger is placed
+  if (irValue > FINGER_ON)
+  {
+
+    // Check for a heartbeat and measure heart rate
+    if (checkForBeat(irValue) == true)
+    {
+      // Serial.println(" BPM"); // Display heart rate value
+      //  Display blood oxygen value
+
+      sendBeat = beatAvg;
+      long delta = millis() - lastBeat; // Calculate heart rate difference
+      lastBeat = millis();
+      beatsPerMinute = 60 / (delta / 1000.0); // Calculate average heart rate
+      if (beatsPerMinute < 255 && beatsPerMinute > 20)
+      {
+        // The heartbeat must be between 20-255
+        rates[rateSpot++] = (byte)beatsPerMinute; // Array to store heartbeat values
+        rateSpot %= RATE_SIZE;
+        beatAvg = 0; // Calculate average
+        for (byte x = 0; x < RATE_SIZE; x++)
+          beatAvg += rates[x];
+        beatAvg /= RATE_SIZE;
+      }
+    }
+
+    // Medir o oxigênio no sangue
+    uint32_t ir, red;
+    double fred, fir;
+    particleSensor.check(); // Check the sensor, read up to 3 samples
+    if (particleSensor.available())
+    {
+      i++;
+      ir = particleSensor.getFIFOIR();   // Ler infravermelho
+      red = particleSensor.getFIFORed(); // Leia a luz vermelha
+      // Serial.println("red=" + String(red) + ",IR=" + String(ir) + ",i=" + String(i));
+      fir = (double)ir;                                      // Convert double
+      fred = (double)red;                                    // Convert double
+      aveir = aveir * frate + (double)ir * (1.0 - frate);    // average IR level by low pass filter
+      avered = avered * frate + (double)red * (1.0 - frate); // average red level by low pass filter
+      sumirrms += (fir - aveir) * (fir - aveir);             // square sum of alternate component of IR level
+      sumredrms += (fred - avered) * (fred - avered);        // square sum of alternate component of red level
+
+      if ((i % Num) == 0)
+      {
+        double R = (sqrt(sumirrms) / aveir) / (sqrt(sumredrms) / avered);
+        SpO2 = -23.3 * (R - 0.4) + 100;
+        ESpO2 = FSpO2 * ESpO2 + (1.0 - FSpO2) * SpO2; // low pass filter
+        if (ESpO2 <= MINIMUM_SPO2)
+          ESpO2 = MINIMUM_SPO2; // indicator for finger detached
+        if (ESpO2 > 100)
+          ESpO2 = 99.9;
+        // Serial.print(",SPO2="); Serial.println(ESpO2);
+        sumredrms = 0.0;
+        sumirrms = 0.0;
+        SpO2 = 0;
+        i = 0;
+      }
+      particleSensor.nextSample(); // We're finished with this sample so move to next sample
+    }
+
+    if (beatAvg > 30)
+      return beatAvg;
+    // Nenhum dedo detectado, limpe todos os dados
+    else
+    {
+      // Limpar dados de batimentos cardíacos
+      for (byte rx = 0; rx < RATE_SIZE; rx++)
+        rates[rx] = 0;
+      beatAvg = 0;
+      rateSpot = 0;
+      lastBeat = 0;
+      // Limpar dados de oxigênio no sangue
+      avered = 0;
+      aveir = 0;
+      sumirrms = 0;
+      sumredrms = 0;
+      SpO2 = 0;
+      ESpO2 = 90.0;
+    }
+  }
+  return 1;
+}
+
+
+// *** INICIO DAS CONFIGURACOES ***
 
 #define SDA 13
 #define SCL 14
 
 void setup() {
     Serial.begin(115200);
-
     // MPU setup
-
+    // Wire.begin();
+    // Wire.beginTransmission(MPU_addr);
+    // Wire.write(0x6B);
     Wire.begin(SDA,SCL);
     mpu6050.begin();
     mpu6050.calcGyroOffsets(true);
@@ -263,20 +464,22 @@ void setup() {
 
 
     // PULSE SENSOR SETUP:
-    setupPulse();
-    sampleTimer = timerBegin(0, 80, true);                
-    timerAttachInterrupt(sampleTimer, &onSampleTime, true);  
-    timerAlarmWrite(sampleTimer, 2000, true);      
-    timerAlarmEnable(sampleTimer);
+    pulseSensor.analogInput(PULSE_INPUT);
+
+    pulseSensor.setSerial(Serial);
+    pulseSensor.setOutputType(OUTPUT_TYPE);
+    pulseSensor.setThreshold(THRESHOLD);
+
+
+
+    // analogReadResolution(10);
     // pulseSensor.analogInput(PULSE_INPUT);
-    // pulseSensor.setSerial(Serial);
-    // pulseSensor.setOutputType(OUTPUT_TYPE);
     // pulseSensor.setThreshold(THRESHOLD);
 
 
     // WIFI SETUP:
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) { //XTODO: Remover comentario
+    while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
@@ -285,10 +488,26 @@ void setup() {
     Serial.println("Endereço IP: ");
     Serial.println(WiFi.localIP());
 
+
     // BOTAO INTERRUPTOR SETUP:
-    pinMode(BOTAO_PINO,PULLUP);
+    pinMode(BOTAO_PINO, PULLUP);
     // Configurar interrupção no pino
     attachInterrupt(digitalPinToInterrupt(BOTAO_PINO), trataInterrupcao, FALLING);
+
+
+    // MAX30102 SETUP:
+    // Check if the MAX30102 sensor is available
+    if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) // Use default I2C port, 400kHz speed
+    {
+        // Serial.println("MAX30102 não encontrado"); // sensor not found
+        while (1)
+            ;
+    }
+    particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); // Configure sensor with these settings
+    particleSensor.enableDIETEMPRDY();
+
+    particleSensor.setPulseAmplitudeRed(0x0A); // Turn Red LED to low to indicate sensor is running
+    particleSensor.setPulseAmplitudeGreen(0);  // Turn off Green LED
 
 }
 
@@ -299,63 +518,70 @@ void setup() {
 // Definir os períodos (ms) das tarefas
 #define PERIODO_MPU 100
 #define PERIODO_PULSE_SENSOR 200
-#define PERIODO_WIFI 500
+#define PERIODO_WIFI 100
+#define PERIODO_MAX 20
 
 // Definir os tempos de execução (ms) das tarefas
 unsigned long lastExecutedMPU = 0;
 unsigned long lastExecutedPulseSensor = 0;
 unsigned long lastExecutedWifi = 0;
+unsigned long lastExecutedMax = 0;
 
 
 // Variaveis de uso:
 bool valFall;
 unsigned int bpmPulse;
 char packet[50];
-
-bool mpuExecuted = false;
-bool pulseSensorExecuted = false;
-bool cicloComplete = false;
+unsigned int maxPulse;
+double spo2;
+unsigned int avgBPM;
 
 void loop() {
     unsigned long agora = millis();
     
     // Executar tafefa do botao
     if (botaoPressionado) {
-        handleWiFiConnection(); // XTODO: Remover Comentario
-        sprintf(packet, "%d %d %d", bpmPulse, valFall, botaoPressionado);
+        handleWiFiConnection();
+        avgBPM = (bpmPulse + maxPulse) / 2;
+        sprintf(packet, "%d %f %d %d", avgBPM, spo2, valFall, botaoPressionado);
         send_event(packet);
-        //Serial.println(packet);
+        Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
     }
 
+    // Executar tarefa do MAX
+    if (agora - lastExecutedMax >= PERIODO_MAX) {
+        lastExecutedMax = agora;
+        maxPulse = getBeatAvg();
+        spo2 = getSpo2();
+    }
 
     // Executar tarefa do MPU
-    if (agora - lastExecutedMPU >= PERIODO_MPU && !cicloComplete) {
+    if (agora - lastExecutedMPU >= PERIODO_MPU) {
         lastExecutedMPU = agora;
         valFall = detectFall();
-        mpuExecuted = true;
     }
 
     // Executar tarefa do Pulse Sensor
-    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR && !pulseSensorExecuted) {
+    if (agora - lastExecutedPulseSensor >= PERIODO_PULSE_SENSOR) {
         lastExecutedPulseSensor = agora;
-        if (pulseSensor.sawStartOfBeat()) {
-            bpmPulse = pulseSensor.getBeatsPerMinute();
-        }
+        bpmPulse = getBpmSample();
     }
-    
 
     // Executar tarefa do WiFi
     if (agora - lastExecutedWifi >= PERIODO_WIFI) {
         lastExecutedWifi = agora;
-        handleWiFiConnection(); //XTODO - Remover comentario
-        sprintf(packet, "%d %d %d", bpmPulse, valFall, botaoPressionado);
+        handleWiFiConnection();
+        
+        avgBPM = (bpmPulse + maxPulse) / 2;
+        sprintf(packet, "%d %f %d %d", bpmPulse, spo2, valFall, botaoPressionado);
         send_event(packet);
-        //Serial.println(packet);
+        Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
-        mpuExecuted, pulseSensorExecuted = false;
     }
 
 }
+
+
