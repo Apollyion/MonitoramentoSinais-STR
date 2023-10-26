@@ -5,7 +5,7 @@ import java.net.*;
 import java.io.*;
 import processing.core.PApplet;
 import g4p_controls.*;
-
+//Bibliotecas de instalação obrigatória: ControlP5 e G4P
 ControlP5 cp5;
 Button connectButton;
 Server server;
