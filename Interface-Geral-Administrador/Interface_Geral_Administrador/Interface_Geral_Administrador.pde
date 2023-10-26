@@ -99,6 +99,8 @@ Client nodemcuClient = null;
 
 void setup() {
   server = new Server(this, port);
+  String serverIP = server.ip();
+  println("Endereço IP do servidor: " + serverIP);
   cp5 = new ControlP5(this);
   size(1400, 800);
   numRows = 10;
