@@ -13,12 +13,32 @@ PApplet parent; // Variável para acessar a classe principal PApplet
 
 
 int viewportY = 0;
-int rowHeight = 100;
+int rowHeight = 150;
 int numRows = 10;
 int maxVisibleRows;
 long lastStatusChangeTime = 0;
 int statusChangeDuration = 5000; // 5000 milissegundos (5 segundos)
 boolean isStatusChanging = false;
+String randomData = "";
+
+String generateRandomData() {
+  int bpm = (int) random(30, 150); // BPM range from 30 to 150 (normal range is typically 60-100)
+  float spo2 = random(75.0, 100.0); // SPO2 range from 75% to 100% (normal range is typically 95-100)
+  int fall = random(2) < 1 ? 0 : 1; // Randomly generate 0 or 1 for fall
+  int panicButton = random(2) < 0.1 ? 1 : 0; // Randomly generate 1 with a 10% chance for panic_button
+  
+  String data = bpm + " " + spo2 + " " + fall + " " + panicButton;
+  return data;
+}
+
+
+
+int dataGenerationInterval = 5000; // Generate data every 5 seconds (adjust as needed)
+int globalLastDataGenerationTime = 0;
+int globalCurrentTime;
+int globalElapsedTime = globalCurrentTime - globalLastDataGenerationTime;
+
+
 
 class User {
   String name;
@@ -27,35 +47,68 @@ class User {
   boolean isClicked = false;
   int diametro = 30;  // Adicione o campo 'diametro' como um inteiro com valor inicial
   boolean estado = false;  // Adicione o campo 'estado' como uma variável booleana com valor inicial
-
+  long lastDataUpdateTime; // Store the last time data was updated for this user
+  int dataUpdateInterval = 5000; // Update data every 5 seconds
+  boolean dataUpdated = false; // Add a flag to track data updates
+  int lastHeartRate = 0; // Store the last obtained heart rate
+  float lastSpo2 = 0; // Store the last obtained SPO2
+  int lastFall = 0; // Store the last obtained fall value
+  int lastPanicButton = 0; // Store the last obtained panic button state
+  int localElapsedTime;
+  
   User(String name, float x, float y) {
     this.name = name;
     this.x = x;
     this.y = y;
-    
+    this.lastDataUpdateTime = millis(); // Initialize the last update time
+    this.localElapsedTime = globalElapsedTime;
   }
 
-  void display() {
-    int baseColor = color(240); // Cor de fundo base
-    int hoverColor = color(255, 100, 100); // Cor de fundo ao passar o mouse
-    int clickColor = color(200); // Cor de fundo ao clicar
+  void display(String externalData) {
+  int baseColor = color(240); // Cor de fundo base
+  int hoverColor = color(255, 100, 100); // Cor de fundo ao passar o mouse
+  int clickColor = color(200); // Cor de fundo ao clicar
 
-    fill(isClicked ? clickColor : (isHovered ? hoverColor : baseColor));
-    rect(x, y, 400, rowHeight);
+  fill(isClicked ? clickColor : (isHovered ? hoverColor : baseColor));
+  rect(x, y, 400, rowHeight);
+
+  fill(0);
+  textAlign(LEFT, CENTER);
+  textSize(24);
+  text(name, x + 10, y + 10);
+
+  // Parse the external data string
+  String[] dataParts = split(externalData, ' ');
+  
+  if (dataParts.length == 4) {
+    int heartRate = int(dataParts[0]);
+    float spo2 = float(dataParts[1]);
+    int fall = int(dataParts[2]);
+    int panicButton = int(dataParts[3]);
     
     
-    fill(0);
-    textAlign(LEFT, CENTER);
-    textSize(24);
-    text(name, x + 10, y + 10);
-
-    textSize(18);
-    int heartRate = int(random(60, 100));
-    String bloodPressure = int(random(90, 140)) + "/" + int(random(60, 90)) + " mmHg";
-    text("Heart Rate: " + heartRate + " bpm", x + 10, y + 40);
-    text("Blood Pressure: " + bloodPressure, x + 10, y + 70);
-    status(); // Chame o método status() sem passar argumentos.
+    
+    if (millis() - localElapsedTime >= dataUpdateInterval) {
+      // Update the last data values
+      lastHeartRate = heartRate;
+      lastSpo2 = spo2;
+      lastFall = fall;
+      lastPanicButton = panicButton;
+      
+      // Update the last update time
+      lastDataUpdateTime = millis();
+    }
+    
+    // Display the last known data
+    text("Heart Rate: " + lastHeartRate + " bpm", x + 10, y + 40);
+    text("SPO2: " + lastSpo2, x + 10, y + 70);
+    text("Fall: " + (lastFall == 1 ? "Fell" : "Normal"), x + 10, y + 100);
+    text("Panic Button: " + (lastPanicButton == 1 ? "Pressed" : "Not Pressed"), x + 10, y + 130);
   }
+
+  status(); // Chame o método status() sem passar argumentos.
+}
+
   
 void status() {
   // Calcule a posição do círculo com base na posição do texto "Blood Pressure" e "Heart Rate"
@@ -102,7 +155,7 @@ void setup() {
   String serverIP = server.ip();
   println("Endereço IP do servidor: " + serverIP);
   cp5 = new ControlP5(this);
-  size(1400, 800);
+  size(1400, 900);
   numRows = 10;
   maxVisibleRows = (height / rowHeight) - 2;
 
@@ -129,6 +182,7 @@ void setup() {
     }
   });
 }
+
 
 void draw() {
 
@@ -166,6 +220,23 @@ void draw() {
     }
   }
   
+  // Calculate elapsed time since the last data generation
+  globalCurrentTime = millis();
+  globalElapsedTime = globalCurrentTime - globalLastDataGenerationTime;
+  
+  if(globalCurrentTime < 5000){
+    println("globalElapsedTime = "+globalElapsedTime);
+  }
+  
+  // Check if it's time to generate new data
+  if (globalElapsedTime >= dataGenerationInterval) {
+      String randomData = generateRandomData();
+      println("Dados articiais: " + randomData); // Prints the generated data string //<>//
+    
+    // Update the last data generation time
+    globalLastDataGenerationTime = globalCurrentTime;
+  }
+  
   background(255);
 
   fill(0);
@@ -178,7 +249,7 @@ void draw() {
     if (rowIndex < numRows) {
       User user = new User("Elderly User " + (rowIndex + 1), 200, 150 + i * rowHeight);
       user.checkHover(mouseX, mouseY);
-      user.display();
+      user.display(generateRandomData());
       if (user.isClicked && !clickedUsers.contains(user)) {
         clickedUsers.add(user);
       } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -191,10 +262,11 @@ void draw() {
   displayArrowButton(75, height - 75, false);
 
   for (User user : clickedUsers) {
-    user.display();
+    user.display(randomData);
   }
    
-  
+  // This should be at the end of your draw() function to control the frame rate
+  frameRate(30); // Adjust the frame rate as needed
 }
 
 void displayArrowButton(float x, float y, boolean isUp) {
