@@ -1,4 +1,4 @@
-import processing.serial.*;
+import processing.serial.*; //<>//
 import processing.net.*;
 import controlP5.*;
 import java.net.*;
@@ -13,13 +13,14 @@ PApplet parent; // Variável para acessar a classe principal PApplet
 
 
 int viewportY = 0;
-int rowHeight = 150;
+int rowHeight = 180;
 int numRows = 10;
 int maxVisibleRows;
 long lastStatusChangeTime = 0;
 int statusChangeDuration = 5000; // 5000 milissegundos (5 segundos)
 boolean isStatusChanging = false;
 String randomData = "";
+float[][] oldValuesOfBpmSpo2FallPanic = new float[numRows][4];//Cria um array de "numRows" usuários para guardar os sinais vitais antigos
 
 String generateRandomData() {
   int bpm = (int) random(30, 150); // BPM range from 30 to 150 (normal range is typically 60-100)
@@ -55,16 +56,18 @@ class User {
   int lastFall = 0; // Store the last obtained fall value
   int lastPanicButton = 0; // Store the last obtained panic button state
   int localElapsedTime;
+  int localIdNumber;
   
-  User(String name, float x, float y) {
+  User(String name, float x, float y, int idNumber) {
     this.name = name;
     this.x = x;
     this.y = y;
     this.lastDataUpdateTime = millis(); // Initialize the last update time
     this.localElapsedTime = globalElapsedTime;
+    this.localIdNumber = idNumber;
   }
 
-  void display(String externalData) {
+  void display(String externalData, int instantUpdate) {
   int baseColor = color(240); // Cor de fundo base
   int hoverColor = color(255, 100, 100); // Cor de fundo ao passar o mouse
   int clickColor = color(200); // Cor de fundo ao clicar
@@ -86,29 +89,65 @@ class User {
     int fall = int(dataParts[2]);
     int panicButton = int(dataParts[3]);
     
-    
-    
-    if (millis() - localElapsedTime >= dataUpdateInterval) {
-      // Update the last data values
-      lastHeartRate = heartRate;
-      lastSpo2 = spo2;
-      lastFall = fall;
-      lastPanicButton = panicButton;
-      
-      // Update the last update time
-      lastDataUpdateTime = millis();
+    println("localIdNumber="+localIdNumber); //<>//
+    if (localElapsedTime >= dataUpdateInterval) {
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] = heartRate;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][1] = spo2;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][2] = fall;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][3] = panicButton;
     }
     
-    // Display the last known data
-    text("Heart Rate: " + lastHeartRate + " bpm", x + 10, y + 40);
-    text("SPO2: " + lastSpo2, x + 10, y + 70);
-    text("Fall: " + (lastFall == 1 ? "Fell" : "Normal"), x + 10, y + 100);
-    text("Panic Button: " + (lastPanicButton == 1 ? "Pressed" : "Not Pressed"), x + 10, y + 130);
+    if(instantUpdate == 1){
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] = heartRate;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][1] = spo2;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][2] = fall;
+      oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][3] = panicButton;
+    }
+    
+    println("localElapsedTime = "+(localElapsedTime));
+    //if (localElapsedTime >= dataUpdateInterval) {
+    //  // Update the last data values
+    //  lastHeartRate = heartRate;
+    //  lastSpo2 = spo2;
+    //  lastFall = fall;
+    //  lastPanicButton = panicButton;
+      
+      // Update the last update time
+      //lastDataUpdateTime = millis();
+    //}
+    if(instantUpdate != 1){
+      // Display the last known data
+      text("- Batimentos Cardíacos: " + oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] + " bpm", x + 10, y + 40);
+      text("- SPO2: " + oldValuesOfBpmSpo2FallPanic[(localIdNumber)][1] + " %", x + 10, y + 70);
+      text("- Queda: " + (oldValuesOfBpmSpo2FallPanic[(localIdNumber)][2] == 1 ? "SIM" : "Não"), x + 10, y + 100);
+      text("- Botão do Pânico: " + (oldValuesOfBpmSpo2FallPanic[(localIdNumber)][3] == 1 ? "PRESSIONADO" : "Não pressionado"), x + 10, y + 130);
+      
+      if(oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] < 50 && oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] != 0){
+        fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
+        text("AVISO: BRADICARDIA!", x + 10, y + 160);
+      }else if(oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] > 100 && oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] != 0){
+        fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
+        text("AVISO: TAQUICARDIA!", x + 10, y + 160);
+      }
+    }else{
+      // Display the last known data
+      text("- Batimentos Cardíacos: " + oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] + " bpm", x + 10, y + 40);
+      text("- SPO2: " + oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][1] + " %", x + 10, y + 70);
+      text("- Queda: " + (oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][2] == 1 ? "SIM" : "Não"), x + 10, y + 100);
+      text("- Botão do Pânico: " + (oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][3] == 1 ? "PRESSIONADO" : "Não pressionado"), x + 10, y + 130);
+      
+      if(oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] < 50 && oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] != 0){
+        fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
+        text("AVISO: BRADICARDIA!", x + 10, y + 160);
+      }else if(oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] > 100 && oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] != 0){
+        fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
+        text("AVISO: TAQUICARDIA!", x + 10, y + 160);
+    }
   }
 
   status(); // Chame o método status() sem passar argumentos.
+  }
 }
-
   
 void status() {
   // Calcule a posição do círculo com base na posição do texto "Blood Pressure" e "Heart Rate"
@@ -157,10 +196,10 @@ void setup() {
   cp5 = new ControlP5(this);
   size(1400, 900);
   numRows = 10;
-  maxVisibleRows = (height / rowHeight) - 2;
+  maxVisibleRows = (height / rowHeight) - 1;
 
   for (int i = 1; i <= numRows; i++) {
-    User user = new User("Elderly User " + i, 200, 150 + (i - 1) * rowHeight);
+    User user = new User("Elderly User " + i, 200, 150 + (i - 1) * rowHeight, i);
     users.add(user);
   }
 
@@ -231,7 +270,7 @@ void draw() {
   // Check if it's time to generate new data
   if (globalElapsedTime >= dataGenerationInterval) {
       String randomData = generateRandomData();
-      println("Dados articiais: " + randomData); // Prints the generated data string //<>//
+      println("Dados artificiais: " + randomData); // Prints the generated data string
     
     // Update the last data generation time
     globalLastDataGenerationTime = globalCurrentTime;
@@ -247,9 +286,9 @@ void draw() {
   for (int i = 0; i < maxVisibleRows; i++) {
     int rowIndex = i + viewportY / rowHeight;
     if (rowIndex < numRows) {
-      User user = new User("Elderly User " + (rowIndex + 1), 200, 150 + i * rowHeight);
+      User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
       user.checkHover(mouseX, mouseY);
-      user.display(generateRandomData());
+      user.display(generateRandomData(),0);
       if (user.isClicked && !clickedUsers.contains(user)) {
         clickedUsers.add(user);
       } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -262,7 +301,7 @@ void draw() {
   displayArrowButton(75, height - 75, false);
 
   for (User user : clickedUsers) {
-    user.display(randomData);
+    user.display(randomData,0);
   }
    
   // This should be at the end of your draw() function to control the frame rate
@@ -280,8 +319,15 @@ void mousePressed() {
   if (mouseX > 50 && mouseX < 100) {
     if (mouseY > 50 && mouseY < 100) {
       scroll(-1);
+      for (User user : users) {
+        user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+      }
+    
     } else if (mouseY > height - 100 && mouseY < height) {
       scroll(1);
+      for (User user : users) {
+        user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+      }
     } else {
       for (User user : users) {
         if (mouseX > user.x && mouseX < user.x + 400 && mouseY > user.y && mouseY < user.y + rowHeight) {
