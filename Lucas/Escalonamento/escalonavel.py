@@ -35,7 +35,10 @@ def desenhar_grafico_escalonabilidade(tarefas, prazo_maximo):
 # Tarefas para Core 1
 tarefas = [{'tempo_execucao': 5, 'prazo': 20, 'nome': 'Oxi_Car(Max):T2'},
            {'tempo_execucao': 2, 'prazo': 100, 'nome': 'Queda(MCU):T3'},
-           {'tempo_execucao': 1, 'prazo': 200, 'nome': 'BPM(Pulse):T4'}]
+           {'tempo_execucao': 1, 'prazo': 200, 'nome': 'BPM(Pulse):T4'},
+           {'tempo_execucao': 4, 'prazo': 500, 'nome': 'EnviarDados'}
+           ]
+           
 
 # # Tarefas para Core 2
 # tarefas = [{'tempo_execucao': 4, 'prazo': 500, 'nome': 'EnviarDados'},

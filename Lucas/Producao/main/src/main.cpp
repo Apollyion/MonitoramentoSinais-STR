@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <esp_system.h> // Certifique-se de incluir este cabeçalho
+#include <esp_task_wdt.h> // Certifique-se de incluir este cabeçalho
 
 // ****INICIO CONFIGURACOES DO MPU**** 
 // DEFINICOES DO MPU
@@ -115,7 +117,7 @@ void IRAM_ATTR onSampleTime() {
     PulseSensorPlayground::OurThis->onSampleTime();
   portEXIT_CRITICAL_ISR(&sampleTimerMux);
 }
-const int THRESHOLD = 685;   // TODO Ajustar o valor caso tenha ruído
+const int THRESHOLD = 530;   // TODO Ajustar o valor caso tenha ruído: 
 
 void setupPulse(){
     analogReadResolution(10);    
@@ -132,10 +134,10 @@ void setupPulse(){
 #include <WiFi.h>
 
 // TODO - Alterar para o SSID e senha da rede
-const char* ssid = "AcerAmigo"; // SSID da rede WiFi
-const char* password = "senhafacil"; // Senha da rede WiFi
+const char* ssid = "brisa-175976"; // SSID da rede WiFi  
+const char* password = "ohmg6d06"; // Senha da rede WiFi
 // TODO - Alterar para o IP e porta do servidor
-const char* serverIP = "192.168.0.129"; // Endereço IP do servidor
+const char* serverIP = "127.0.1.1"; // Endereço IP do servidor
 int serverPort = 12345; // Porta do servidor
 
 WiFiClient client;
@@ -422,13 +424,51 @@ int getBeatAvg() // FUNCAO RETORNA O BeatAvg
 }
 
 
+// Configurandio WATCHDOG 
+
+//função que o temporizador irá chamar, para reiniciar o ESP32
+void IRAM_ATTR resetModule(){
+    ets_printf("(watchdog) reiniciar\n"); //imprime no log
+    // Blink LED 3 times to indicate reset (GPIO 2)
+    pinMode(2, OUTPUT);
+    for(int i = 0; i < 3; i++){
+        digitalWrite(2, HIGH);
+        delay(100);
+        digitalWrite(2, LOW);
+        delay(100);
+    }
+    esp_restart(); //reinicia o chip
+}
+
 // *** INICIO DAS CONFIGURACOES ***
 
 #define SDA 13
 #define SCL 14
+hw_timer_t *timer = NULL; //faz o controle do temporizador (interrupção por tempo)
+
 
 void setup() {
     Serial.begin(115200);
+
+  // WATCHDOG SETUP:
+    // Print the CPU frequency to the Serial Monitor
+    Serial.print("CPU Frequency: ");
+    Serial.print(ESP.getCpuFreqMHz());
+    Serial.println(" MHz");
+
+  // Começa o watchdog com 3 segundos de timeout
+
+  timer = timerBegin(1, ESP.getCpuFreqMHz(), true); //timerID 1, div cpuFreqMHz, contagem ascendente
+  //timer, callback, interrupção de borda
+  timerAttachInterrupt(timer, &resetModule, true);
+  //timer, tempo (us), repetição
+  timerAlarmWrite(timer, 5000000, true); //3s
+  timerAlarmEnable(timer); //habilita a interrupção 
+
+
+
+
+
     // MPU setup
     // Wire.begin();
     // Wire.beginTransmission(MPU_addr);
@@ -440,11 +480,13 @@ void setup() {
     Wire.endTransmission(true);
 
 
+
+    // Pulse Sensor setup
     setupPulse();
-        sampleTimer = timerBegin(0, 80, true);                
-        timerAttachInterrupt(sampleTimer, &onSampleTime, true);  
-        timerAlarmWrite(sampleTimer, 2000, true);      
-        timerAlarmEnable(sampleTimer);
+    sampleTimer = timerBegin(0, ESP.getCpuFreqMHz(), true);                
+    timerAttachInterrupt(sampleTimer, &onSampleTime, true);  
+    timerAlarmWrite(sampleTimer, 480, true); // TODO: Aumentar o valor do tempo do PulseSensor
+    timerAlarmEnable(sampleTimer);
 
 
 
@@ -470,22 +512,28 @@ void setup() {
     // Configurar interrupção no pino
     attachInterrupt(digitalPinToInterrupt(BOTAO_PINO), trataInterrupcao, FALLING);
 
+    //TODO: Remover comentario MAX
+    // // MAX30102 SETUP:
+    // // Check if the MAX30102 sensor is available
+    // if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) // Use default I2C port, 400kHz speed
+    // {
+    //     Serial.println("MAX30102 não encontrado"); // sensor not found
+    //     while (1)
+    //         ;
+    // }
+    // particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); // Configure sensor with these settings
+    // particleSensor.enableDIETEMPRDY();
 
-    // MAX30102 SETUP:
-    // Check if the MAX30102 sensor is available
-    if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) // Use default I2C port, 400kHz speed
-    {
-        Serial.println("MAX30102 não encontrado"); // sensor not found
-        while (1)
-            ;
-    }
-    particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); // Configure sensor with these settings
-    particleSensor.enableDIETEMPRDY();
-
-    particleSensor.setPulseAmplitudeRed(0x0A); // Turn Red LED to low to indicate sensor is running
-    particleSensor.setPulseAmplitudeGreen(0);  // Turn off Green LED
+    // particleSensor.setPulseAmplitudeRed(0x0A); // Turn Red LED to low to indicate sensor is running
+    // particleSensor.setPulseAmplitudeGreen(0);  // Turn off Green LED
 
 }
+
+
+
+
+
+
 
 // *** FIM DAS CONFIGURACOES ***
 
@@ -521,7 +569,15 @@ bool cicloComplete = false;
 
 void loop() {
     unsigned long agora = millis();
-    
+
+    //Reinicia o watchdog
+    timerWrite(timer, 1); //reseta o timer
+  
+
+    //Serial.printf("\nBOTAO: %d\n", digitalRead(21)); TODO: Remover Linha
+    /*
+
+    //TODO: Remover bloco de codigo
     // Executar tafefa do botao
     if (botaoPressionado) {
         handleWiFiConnection();
@@ -532,13 +588,16 @@ void loop() {
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
     }
+    */
 
-    // Executar tarefa do MAX
-    if (agora - lastExecutedMax >= PERIODO_MAX && !maxExecuted) {
-        lastExecutedMax = agora;
-        maxPulse = getBeatAvg();
-        spo2 = getSpo2();
-    }
+
+    //TODO: Remover Comentario MAX
+    // // Executar tarefa do MAX
+    // if (agora - lastExecutedMax >= PERIODO_MAX && !maxExecuted) {
+    //     lastExecutedMax = agora;
+    //     maxPulse = getBeatAvg();
+    //     spo2 = getSpo2();
+    // }
 
     // Executar tarefa do MPU
     if (agora - lastExecutedMPU >= PERIODO_MPU && !mpuExecuted) {
@@ -553,6 +612,7 @@ void loop() {
           bpmPulse = pulseSensor.getBeatsPerMinute();
         }
         Serial.printf("BPM: %d\n", bpmPulse);  // Exibir o BPM
+        Serial.printf("Analog: %d\n", pulseSensor.getLatestSample());  // Exibir o Analog
     }
 
     // Executar tarefa do WiFi
@@ -560,9 +620,11 @@ void loop() {
         lastExecutedWifi = agora;
         handleWiFiConnection();
         
-        avgBPM = (bpmPulse + maxPulse) / 2;
-        sprintf(packet, "%d %f %d %d", avgBPM, spo2, valFall, botaoPressionado);
-        send_event(packet);
+        avgBPM = (bpmPulse + bpmPulse) / 2; //TODO: Trocar um dos bpmPulse por maxPulse
+
+        //TODO: Remover comentarios
+        //sprintf(packet, "%d %f %d %d", avgBPM, spo2, valFall, botaoPressionado);
+        //send_event(packet);
         //Serial.println(packet);
         sprintf(packet, "");
         botaoPressionado = false;  // Reiniciar o estado do botao
