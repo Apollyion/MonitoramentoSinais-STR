@@ -47,7 +47,7 @@ class User {
   boolean isHovered = false;
   boolean isClicked = false;
   int diametro = 30;  // Adicione o campo 'diametro' como um inteiro com valor inicial
-  boolean estado = false;  // Adicione o campo 'estado' como uma variável booleana com valor inicial
+  int status = 0; // 0: verde, 1: amarelo, 2: vermelho
   long lastDataUpdateTime; // Store the last time data was updated for this user
   int dataUpdateInterval = 5000; // Update data every 5 seconds
   boolean dataUpdated = false; // Add a flag to track data updates
@@ -125,9 +125,11 @@ class User {
       if(oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] < 50 && oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] != 0){
         fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
         text("AVISO: BRADICARDIA!", x + 10, y + 160);
+        status = 1; // Amarelo (BRADICARDIA)
       }else if(oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] > 100 && oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] != 0){
         fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
         text("AVISO: TAQUICARDIA!", x + 10, y + 160);
+        status = 2; // Vermelho (TAQUICARDIA)
       }
     }else{
       // Display the last known data
@@ -149,30 +151,24 @@ class User {
   }
 }
   
-void status() {
-  // Calcule a posição do círculo com base na posição do texto "Blood Pressure" e "Heart Rate"
-  float circleX = x + 370; // Ajuste a posição X como desejar
-  float circleY = y + 80;  // Ajuste a posição Y como desejar
-  
-// Verifique se o mouse está sobre o círculo
-  boolean isMouseOverCircle = dist(mouseX, mouseY, circleX, circleY) < diametro / 2;
+  void status() {
+    float circleX = x + 370;
+    float circleY = y + 80;
 
-  // Se o mouse estiver sobre o círculo e ele foi clicado, inverta o estado
-  if (isMouseOverCircle && mousePressed) {
-    // Inverta o estado da elipse
-    estado = !estado;
+    switch (status) {
+      case 0:
+        fill(0, 255, 0); // Verde
+        break;
+      case 1:
+        fill(255, 255, 0); // Amarelo
+        break;
+      case 2:
+        fill(255, 0, 0); // Vermelho
+        break;
+    }
+
+    ellipse(circleX, circleY, diametro, diametro);
   }
-
-  // Use a variável "elipseVermelha" para determinar a cor do círculo
-  if (estado) {
-    fill(200, 0, 0);  // Vermelho
-  } else {
-    fill(0, 255, 0);  // Verde
-  }
-
-  // Desenhe o círculo
-  ellipse(circleX, circleY, diametro, diametro);
-}
 
 
 
@@ -202,7 +198,7 @@ void setup() {
     User user = new User("Elderly User " + i, 200, 150 + (i - 1) * rowHeight, i);
     users.add(user);
   }
-
+  
   connectButton = cp5.addButton("Connect")
     .setPosition(900, 310)
     .setSize(300, 80)
@@ -306,6 +302,8 @@ void draw() {
    
   // This should be at the end of your draw() function to control the frame rate
   frameRate(30); // Adjust the frame rate as needed
+  
+  
 }
 
 void displayArrowButton(float x, float y, boolean isUp) {
