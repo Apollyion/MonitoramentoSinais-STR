@@ -7,10 +7,10 @@ import processing.core.PApplet;
 import g4p_controls.*;
 //Bibliotecas de instalação obrigatória: ControlP5 e G4P
 ControlP5 cp5;
-Button connectButton;
+Button emergencyButton; // Novo botão de emergência
 Server server;
 PApplet parent; // Variável para acessar a classe principal PApplet
-
+boolean isEsp32Connected = false; // Variável para rastrear a conexão com a esp32
 
 int viewportY = 0;
 int rowHeight = 180;
@@ -199,23 +199,35 @@ void setup() {
     users.add(user);
   }
   
-  connectButton = cp5.addButton("Connect")
-    .setPosition(900, 310)
+   emergencyButton = cp5.addButton("Emergency")
+    .setPosition(900, 410)
     .setSize(300, 80)
-    .setCaptionLabel("Queda!!!")
+    .setCaptionLabel("Botão de Emergência")
     .setColorCaptionLabel(color(255))
     .setColorBackground(color(220, 0, 0))
     .setColorActive(color(200, 0, 0))
-    .setFont(createFont("Arial", 32));
+    .setColorForeground(color(255, 0, 0)) // Cor do contorno
+    .setFont(createFont("Arial", 24));
 
-  connectButton.addListener(new ControlListener() {
+  // Adicione um ouvinte de evento para o novo botão
+  emergencyButton.addListener(new ControlListener() {
     public void controlEvent(ControlEvent theEvent) {
-      if (theEvent.getController() == connectButton) {
-        println("IDOSO X NO CHÃO!!!!");
-        
+      if (theEvent.getController() == emergencyButton) {
+        // Envie a string "1" (ou qualquer outra string desejada)
+        println("String enviada: 1");
+
+      
       }
     }
   });
+  
+  // Adicione um texto para indicar a conexão com a esp32
+  cp5.addTextlabel("connectionStatus")
+    .setPosition(1200, 10)
+    .setColorValue(color(0))
+    .setFont(createFont("Arial", 18))
+    .setText("Desconectado");
+    
 }
 
 
@@ -304,6 +316,17 @@ void draw() {
   frameRate(30); // Adjust the frame rate as needed
   
   
+ // Verifique se a esp32 está conectada e atualize o texto
+  if (isEsp32Connected) {
+    cp5.get(Textlabel.class, "connectionStatus").setText("Conectado").setColorValue(color(0, 255, 0));
+  } else {
+    cp5.get(Textlabel.class, "connectionStatus").setText("Desconectado").setColorValue(color(255, 0, 0));
+  }
+}
+
+// Adicione este método para atualizar o estado da conexão da esp32
+void updateEsp32ConnectionStatus(boolean isConnected) {
+  isEsp32Connected = isConnected;
 }
 
 void displayArrowButton(float x, float y, boolean isUp) {
