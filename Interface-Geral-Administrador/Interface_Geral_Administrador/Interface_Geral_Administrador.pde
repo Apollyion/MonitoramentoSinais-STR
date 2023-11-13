@@ -1,4 +1,4 @@
-import processing.serial.*; //<>//
+import processing.serial.*; //<>// //<>//
 import processing.net.*;
 import controlP5.*;
 import java.net.*;
@@ -11,6 +11,7 @@ Button emergencyButton; // Novo botão de emergência
 Server server;
 PApplet parent; // Variável para acessar a classe principal PApplet
 boolean isEsp32Connected = false; // Variável para rastrear a conexão com a esp32
+String globalDataSentByESP32 = "";
 
 int viewportY = 0;
 int rowHeight = 180;
@@ -89,7 +90,7 @@ class User {
     int fall = int(dataParts[2]);
     int panicButton = int(dataParts[3]);
     
-    println("localIdNumber="+localIdNumber); //<>//
+    //println("localIdNumber="+localIdNumber);
     if (localElapsedTime >= dataUpdateInterval) {
       oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] = heartRate;
       oldValuesOfBpmSpo2FallPanic[(localIdNumber)][1] = spo2;
@@ -104,7 +105,7 @@ class User {
       oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][3] = panicButton;
     }
     
-    println("localElapsedTime = "+(localElapsedTime));
+    //println("localElapsedTime = "+(localElapsedTime));
     //if (localElapsedTime >= dataUpdateInterval) {
     //  // Update the last data values
     //  lastHeartRate = heartRate;
@@ -259,7 +260,9 @@ void draw() {
   } else {
     if (esp32Client.available() > 0) {
       String data = esp32Client.readString();
+      updateEsp32ConnectionStatus(true);//Existe cliente, então o servidor está conectado com o ESP32
       if (data != null) {
+        globalDataSentByESP32 = data;//Guarda o último dado enviado pelo ESP32 em uma variável global
         println("Data received from esp32: " + data);
         nodemcuClient.write(data);
         println("Data sent to nodemcu: " + data + "\n");
@@ -294,14 +297,55 @@ void draw() {
   for (int i = 0; i < maxVisibleRows; i++) {
     int rowIndex = i + viewportY / rowHeight;
     if (rowIndex < numRows) {
-      User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
-      user.checkHover(mouseX, mouseY);
-      user.display(generateRandomData(),0);
-      if (user.isClicked && !clickedUsers.contains(user)) {
-        clickedUsers.add(user);
-      } else if (!user.isClicked && clickedUsers.contains(user)) {
-        clickedUsers.remove(user);
+      if (globalDataSentByESP32 != "" && (i + 1) == 1){//Está no usuário 1 e TEMOS DADOS da ESP32
+        //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
+        User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+        user.checkHover(mouseX, mouseY);
+        user.display(globalDataSentByESP32,0);
+        if (user.isClicked && !clickedUsers.contains(user)) {
+          clickedUsers.add(user);
+        } else if (!user.isClicked && clickedUsers.contains(user)) {
+          clickedUsers.remove(user);
+        }
+      }else if (globalDataSentByESP32 == "" && (i + 1) == 1){//Está no usuário 1 e NÃO TEMOS DADOS da ESP32
+        //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
+        User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+        user.checkHover(mouseX, mouseY);
+        user.display(generateRandomData(),0);
+        if (user.isClicked && !clickedUsers.contains(user)) {
+          clickedUsers.add(user);
+        } else if (!user.isClicked && clickedUsers.contains(user)) {
+          clickedUsers.remove(user);
+        }
+      }else if (globalDataSentByESP32 == "" && (i + 1) != 1){//Está em qualquer outro usuário além do primeiro e independentemente de termos dados ou não dados da ESP32.
+      //Mostra dados artificiais para os outros Usuários (do segundo em diante)
+        User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+        user.checkHover(mouseX, mouseY);
+        user.display(generateRandomData(),0);
+        if (user.isClicked && !clickedUsers.contains(user)) {
+          clickedUsers.add(user);
+        } else if (!user.isClicked && clickedUsers.contains(user)) {
+          clickedUsers.remove(user);
+        }
+      }else if (globalDataSentByESP32 != "" && (i + 1) != 1){//Está em qualquer outro usuário além do primeiro e independentemente de termos dados ou não dados da ESP32.
+      //Mostra dados artificiais para os outros Usuários (do segundo em diante)
+        User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+        user.checkHover(mouseX, mouseY);
+        user.display(generateRandomData(),0);
+        if (user.isClicked && !clickedUsers.contains(user)) {
+          clickedUsers.add(user);
+        } else if (!user.isClicked && clickedUsers.contains(user)) {
+          clickedUsers.remove(user);
+        }
       }
+      //User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+      //user.checkHover(mouseX, mouseY);
+      //user.display(generateRandomData(),0);
+      //if (user.isClicked && !clickedUsers.contains(user)) {
+      //  clickedUsers.add(user);
+      //} else if (!user.isClicked && clickedUsers.contains(user)) {
+      //  clickedUsers.remove(user);
+      //}
     }
   }
 
@@ -340,8 +384,25 @@ void mousePressed() {
   if (mouseX > 50 && mouseX < 100) {
     if (mouseY > 50 && mouseY < 100) {
       scroll(-1);
+      int i = 0;
       for (User user : users) {
-        user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+        int rowIndex = i + viewportY / rowHeight;
+        if (rowIndex < numRows) {
+          if (globalDataSentByESP32 != "" && (i + 1) == 1){//Está no usuário 1 e TEMOS DADOS da ESP32
+            //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
+            user.display(globalDataSentByESP32,1);
+          }else if (globalDataSentByESP32 == "" && (i + 1) == 1){//Está no usuário 1 e NÃO TEMOS DADOS da ESP32
+            //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
+            user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+          }else if (globalDataSentByESP32 == "" && (i + 1) != 1){//Está em qualquer outro usuário além do primeiro e independentemente de termos dados ou não dados da ESP32.
+          //Mostra dados artificiais para os outros Usuários (do segundo em diante)
+            user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+          }else if (globalDataSentByESP32 != "" && (i + 1) != 1){//Está em qualquer outro usuário além do primeiro e independentemente de termos dados ou não dados da ESP32.
+          //Mostra dados artificiais para os outros Usuários (do segundo em diante)
+            user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
+          }
+        }
+        i = i + 1;
       }
     
     } else if (mouseY > height - 100 && mouseY < height) {
