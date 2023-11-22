@@ -1,4 +1,4 @@
-import processing.serial.*; //<>// //<>//
+import processing.serial.*; //<>//
 import processing.net.*;
 import controlP5.*;
 import java.net.*;
@@ -12,6 +12,9 @@ Server server;
 PApplet parent; // Variável para acessar a classe principal PApplet
 boolean isEsp32Connected = false; // Variável para rastrear a conexão com a esp32
 String globalDataSentByESP32 = "";
+// Exemplo de string enviada pelo ESP32: 51 61 0 0
+int pressionedInstant = 1000000; // Botao
+int pressedPanicButton = 0;
 
 int viewportY = 0;
 int rowHeight = 180;
@@ -70,7 +73,7 @@ class User {
 
   void display(String externalData, int instantUpdate) {
   int baseColor = color(240); // Cor de fundo base
-  int hoverColor = color(255, 100, 100); // Cor de fundo ao passar o mouse
+  int hoverColor = color(170, 170, 255); // Cor de fundo ao passar o mouse
   int clickColor = color(200); // Cor de fundo ao clicar
 
   fill(isClicked ? clickColor : (isHovered ? hoverColor : baseColor));
@@ -86,17 +89,34 @@ class User {
   
   if (dataParts.length == 4) {
     int heartRate = int(dataParts[0]);
-    float spo2 = float(dataParts[1]);
+    int spo2 = int(dataParts[1]);
     int fall = int(dataParts[2]);
     int panicButton = int(dataParts[3]);
     
-    //println("localIdNumber="+localIdNumber);
+    //println(externalData);
+    
+    //println("localIdNumber="+localIdNumber); //<>//
+    
+     if(spo2 > 0){
+      pressedPanicButton = spo2;
+      println("Entrou");
+    }
+      
     if (localElapsedTime >= dataUpdateInterval) {
       oldValuesOfBpmSpo2FallPanic[(localIdNumber)][0] = heartRate;
       oldValuesOfBpmSpo2FallPanic[(localIdNumber)][1] = spo2;
-      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][2] = fall;
-      oldValuesOfBpmSpo2FallPanic[(localIdNumber)][3] = panicButton;
+      //oldValuesOfBpmSpo2FallPanic[(localIdNumber)][2] = fall;
+      //oldValuesOfBpmSpo2FallPanic[(localIdNumber)][3] = pressedPanicButton;
+      //println("spp02 global: "+pressedPanicButton);
     }
+    
+    
+    
+    //ATENÇÃO: AS VARIÁVEIS DE BOTÃO DE PÂNICO E QUEDA PRECISAM SER ATUALIZADAS CONSTANTEMENTE. SE OLHARMOS PARA ELAS SÓ A CADA 5 SEGUNDOS, PODEMOS PERDER UMA EMERGÊNCIA
+    oldValuesOfBpmSpo2FallPanic[(localIdNumber)][2] = fall;
+    oldValuesOfBpmSpo2FallPanic[(localIdNumber)][3] = panicButton;
+    
+    
     
     if(instantUpdate == 1){
       oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] = heartRate;
@@ -132,6 +152,13 @@ class User {
         text("AVISO: TAQUICARDIA!", x + 10, y + 160);
         status = 2; // Vermelho (TAQUICARDIA)
       }
+      //int delta = millis();
+      if(globalPointerNodemcuClient != null && (fall == 1 || panicButton == 1)){
+        //if(abs(millis() - pressionedInstant) >= 5000){
+          globalPointerNodemcuClient.write("1\n");//Envia "1" para o nodeMCU acender o LED e tocar sinal sonoro pois ocorreu queda ou o botão do pânico
+          pressionedInstant = millis();
+        //}
+      }
     }else{
       // Display the last known data
       text("- Batimentos Cardíacos: " + oldValuesOfBpmSpo2FallPanic[(localIdNumber - 1)][0] + " bpm", x + 10, y + 40);
@@ -146,6 +173,13 @@ class User {
         fill(255, 0, 0);  // Set the text color to red (RGB: 255, 0, 0)
         text("AVISO: TAQUICARDIA!", x + 10, y + 160);
     }
+    //int delta = millis();
+      if(globalPointerNodemcuClient != null && (fall == 1 || panicButton == 1)){
+        //if(abs(millis() - pressionedInstant) >= 5000){
+          globalPointerNodemcuClient.write("1\n");//Envia "1" para o nodeMCU acender o LED e tocar sinal sonoro pois ocorreu queda ou o botão do pânico
+          pressionedInstant = millis();
+        //}
+      }
   }
 
   status(); // Chame o método status() sem passar argumentos.
@@ -184,6 +218,7 @@ ArrayList<User> clickedUsers = new ArrayList<User>();
 int port = 12345;
 Client esp32Client = null;
 Client nodemcuClient = null;
+Client globalPointerNodemcuClient = null;
 
 
 void setup() {
@@ -215,7 +250,13 @@ void setup() {
     public void controlEvent(ControlEvent theEvent) {
       if (theEvent.getController() == emergencyButton) {
         // Envie a string "1" (ou qualquer outra string desejada)
-        println("String enviada: 1");
+        
+      print("millis no botão: " + millis());
+      if(abs(millis() - pressionedInstant) >= 5000){
+        nodemcuClient.write("1\n");//Envia "1" para o nodeMCU acender o LED e tocar sinal sonoro pois ocorreu queda ou o botão do pânico
+        pressionedInstant = millis();
+      }
+      
 
       
       }
@@ -244,6 +285,7 @@ void draw() {
   if (esp32Client == null || nodemcuClient == null) {
     Client client = server.available();
     if (client != null) {
+      globalPointerNodemcuClient = nodemcuClient;
       String data = client.readString();
       if (data != null) {
         println("Data received from client: " + data);
@@ -260,13 +302,19 @@ void draw() {
   } else {
     if (esp32Client.available() > 0) {
       String data = esp32Client.readString();
-      updateEsp32ConnectionStatus(true);//Existe cliente, então o servidor está conectado com o ESP32
-      if (data != null) {
-        globalDataSentByESP32 = data;//Guarda o último dado enviado pelo ESP32 em uma variável global
-        println("Data received from esp32: " + data);
-        nodemcuClient.write(data);
-        println("Data sent to nodemcu: " + data + "\n");
-      }
+      //println(data.length());
+      if (data.length() == 2){
+        //println("Vazio");
+        
+      }else{
+        updateEsp32ConnectionStatus(true);//Existe cliente, então o servidor está conectado com o ESP32
+        //if (data != null) {
+          globalDataSentByESP32 = data;//Guarda o último dado enviado pelo ESP32 em uma variável global
+          println("Data received from esp32: " + data);
+          //nodemcuClient.write(data);
+          //println("Data sent to nodemcu: " + data + "\n");
+        //}
+      } 
     }
   }
   
@@ -275,13 +323,13 @@ void draw() {
   globalElapsedTime = globalCurrentTime - globalLastDataGenerationTime;
   
   if(globalCurrentTime < 5000){
-    println("globalElapsedTime = "+globalElapsedTime);
+    //println("globalElapsedTime = "+globalElapsedTime);
   }
   
   // Check if it's time to generate new data
   if (globalElapsedTime >= dataGenerationInterval) {
       String randomData = generateRandomData();
-      println("Dados artificiais: " + randomData); // Prints the generated data string
+      //println("Dados artificiais: " + randomData); // Prints the generated data string
     
     // Update the last data generation time
     globalLastDataGenerationTime = globalCurrentTime;
@@ -302,6 +350,7 @@ void draw() {
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
         user.display(globalDataSentByESP32,0);
+        println("globalDataSentByESP32 = "+globalDataSentByESP32);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -311,7 +360,7 @@ void draw() {
         //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display(generateRandomData(),0);
+        user.display("0 0.0 0 0",0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -321,7 +370,7 @@ void draw() {
       //Mostra dados artificiais para os outros Usuários (do segundo em diante)
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display(generateRandomData(),0);
+        user.display("0 0.0 0 0",0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -331,21 +380,21 @@ void draw() {
       //Mostra dados artificiais para os outros Usuários (do segundo em diante)
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display(generateRandomData(),0);
+        user.display("0 0.0 0 0",0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
           clickedUsers.remove(user);
         }
       }
-      //User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
-      //user.checkHover(mouseX, mouseY);
-      //user.display(generateRandomData(),0);
-      //if (user.isClicked && !clickedUsers.contains(user)) {
-      //  clickedUsers.add(user);
-      //} else if (!user.isClicked && clickedUsers.contains(user)) {
-      //  clickedUsers.remove(user);
-      //}
+      User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+      user.checkHover(mouseX, mouseY);
+      user.display(generateRandomData(),0);
+      if (user.isClicked && !clickedUsers.contains(user)) {
+        clickedUsers.add(user);
+      } else if (!user.isClicked && clickedUsers.contains(user)) {
+        clickedUsers.remove(user);
+      }
     }
   }
 
@@ -361,7 +410,7 @@ void draw() {
   
   
  // Verifique se a esp32 está conectada e atualize o texto
-  if (isEsp32Connected) {
+  if ((isEsp32Connected == true) || (globalPointerNodemcuClient != null)) {
     cp5.get(Textlabel.class, "connectionStatus").setText("Conectado").setColorValue(color(0, 255, 0));
   } else {
     cp5.get(Textlabel.class, "connectionStatus").setText("Desconectado").setColorValue(color(255, 0, 0));
@@ -390,7 +439,7 @@ void mousePressed() {
         if (rowIndex < numRows) {
           if (globalDataSentByESP32 != "" && (i + 1) == 1){//Está no usuário 1 e TEMOS DADOS da ESP32
             //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
-            user.display(globalDataSentByESP32,1);
+            user.display(globalDataSentByESP32,1); //<>//
           }else if (globalDataSentByESP32 == "" && (i + 1) == 1){//Está no usuário 1 e NÃO TEMOS DADOS da ESP32
             //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
             user.display(generateRandomData(), 1); // Use 1 to indicate instant data update
