@@ -99,7 +99,7 @@ class User {
     
      if(spo2 > 0){
       pressedPanicButton = spo2;
-      println("Entrou");
+      //println("Entrou");
     }
       
     if (localElapsedTime >= dataUpdateInterval) {
@@ -253,8 +253,12 @@ void setup() {
         
       print("millis no botão: " + millis());
       if(abs(millis() - pressionedInstant) >= 5000){
+          if(nodemcuClient == null){
+            println ("A");
+          }else{
         nodemcuClient.write("1\n");//Envia "1" para o nodeMCU acender o LED e tocar sinal sonoro pois ocorreu queda ou o botão do pânico
         pressionedInstant = millis();
+          }
       }
       
 
@@ -345,6 +349,7 @@ void draw() {
   for (int i = 0; i < maxVisibleRows; i++) {
     int rowIndex = i + viewportY / rowHeight;
     if (rowIndex < numRows) {
+      //println("i = "+i);
       if (globalDataSentByESP32 != "" && (i + 1) == 1){//Está no usuário 1 e TEMOS DADOS da ESP32
         //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
@@ -360,7 +365,7 @@ void draw() {
         //Mostra os DADOS REAIS enviados pelo ESP32 no Usuário 1
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display("0 0.0 0 0",0);
+        user.display(generateRandomData(),0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -370,7 +375,7 @@ void draw() {
       //Mostra dados artificiais para os outros Usuários (do segundo em diante)
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display("0 0.0 0 0",0);
+        user.display(generateRandomData(),0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
@@ -380,21 +385,21 @@ void draw() {
       //Mostra dados artificiais para os outros Usuários (do segundo em diante)
         User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
         user.checkHover(mouseX, mouseY);
-        user.display("0 0.0 0 0",0);
+        user.display(generateRandomData(),0);
         if (user.isClicked && !clickedUsers.contains(user)) {
           clickedUsers.add(user);
         } else if (!user.isClicked && clickedUsers.contains(user)) {
           clickedUsers.remove(user);
         }
       }
-      User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
-      user.checkHover(mouseX, mouseY);
-      user.display(generateRandomData(),0);
-      if (user.isClicked && !clickedUsers.contains(user)) {
-        clickedUsers.add(user);
-      } else if (!user.isClicked && clickedUsers.contains(user)) {
-        clickedUsers.remove(user);
-      }
+      //User user = new User("Elderly User " + (rowIndex + 1) + ": ", 200, 150 + i * rowHeight, i);
+      //user.checkHover(mouseX, mouseY);
+      //user.display(generateRandomData(),0);
+      //if (user.isClicked && !clickedUsers.contains(user)) {
+      //  clickedUsers.add(user);
+      //} else if (!user.isClicked && clickedUsers.contains(user)) {
+      //  clickedUsers.remove(user);
+      //}
     }
   }
 
